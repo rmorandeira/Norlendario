@@ -26,6 +26,9 @@ const Api = {
   async logout() {
     await fetch("/api/auth/logout", { method: "POST" });
   },
+  async deleteAccount() {
+    await fetch("/api/auth/account", { method: "DELETE" });
+  },
   async getFavorites() {
     const r = await fetch("/api/favorites");
     if (!r.ok) return [];

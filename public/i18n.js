@@ -41,7 +41,23 @@ const I18N = {
     favShowBtn: "Ver favoritos",
     favHideBtn: "Ocultar favoritos",
     favoriteAdd: "Añadir a favoritos",
-    favoriteRemove: "Quitar de favoritos"
+    favoriteRemove: "Quitar de favoritos",
+
+    navCalendar: "Calendario",
+    navRoute: "Mi ruta",
+    navUser: "Usuario",
+    routeTitle: "Mi ruta",
+    routeGuestMsg: "Inicia sesión para guardar tus favoritos y verlos aquí como tu ruta por el festival.",
+    routeEmptyMsg: "Aún no tienes favoritos. Toca la estrella en un concierto para añadirlo a tu ruta.",
+    userTitle: "Usuario",
+    languageLabel: "Idioma",
+    themeLabel: "Tema",
+    lightModeBtn: "Modo claro",
+    darkModeBtn: "Modo oscuro",
+    deleteAccountBtn: "Eliminar cuenta",
+    deleteAccountConfirm: "¿Seguro que quieres eliminar tu cuenta? Se borrarán tu usuario y tus favoritos permanentemente.",
+    deleteAccountConfirmBtn: "Sí, eliminar cuenta",
+    cancelBtn: "Cancelar"
   },
   en: {
     month: "August",
@@ -85,7 +101,23 @@ const I18N = {
     favShowBtn: "Show favorites",
     favHideBtn: "Hide favorites",
     favoriteAdd: "Add to favorites",
-    favoriteRemove: "Remove from favorites"
+    favoriteRemove: "Remove from favorites",
+
+    navCalendar: "Calendar",
+    navRoute: "My route",
+    navUser: "Account",
+    routeTitle: "My route",
+    routeGuestMsg: "Log in to save your favorites and see them here as your route through the festival.",
+    routeEmptyMsg: "No favorites yet. Tap the star on a show to add it to your route.",
+    userTitle: "Account",
+    languageLabel: "Language",
+    themeLabel: "Theme",
+    lightModeBtn: "Light mode",
+    darkModeBtn: "Dark mode",
+    deleteAccountBtn: "Delete account",
+    deleteAccountConfirm: "Are you sure you want to delete your account? Your user and favorites will be permanently removed.",
+    deleteAccountConfirmBtn: "Yes, delete my account",
+    cancelBtn: "Cancel"
   }
 };
 

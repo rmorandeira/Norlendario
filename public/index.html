@@ -22,20 +22,27 @@
     </div>
   </header>
 
-  <nav class="day-tabs" id="dayTabs"></nav>
+  <div id="calendarView">
+    <nav class="day-tabs" id="dayTabs"></nav>
 
-  <main>
-    <div class="toolbar">
-      <div class="kofi-container">
-        <a href='https://ko-fi.com/F1F41CM0Q' target='_blank' rel="noopener noreferrer"><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi3.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
+    <main>
+      <div class="toolbar">
+        <div class="kofi-container">
+          <a href='https://ko-fi.com/F1F41CM0Q' target='_blank' rel="noopener noreferrer"><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi3.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
+        </div>
+        <div id="favFilterContainer"></div>
       </div>
-      <div id="favFilterContainer"></div>
-    </div>
-    <div class="timeline-scroll">
-      <div class="timeline" id="timeline"></div>
-    </div>
-    <div class="tba-section" id="tbaSection"></div>
-  </main>
+      <div class="timeline-scroll">
+        <div class="timeline" id="timeline"></div>
+      </div>
+      <div class="tba-section" id="tbaSection"></div>
+    </main>
+  </div>
+
+  <div id="routeView" class="page-view"></div>
+  <div id="userView" class="page-view"></div>
+
+  <nav class="bottom-nav" id="bottomNav"></nav>
 
   <div class="artist-view-backdrop" id="artistViewBackdrop"></div>
   <div class="auth-gate" id="authGate"></div>

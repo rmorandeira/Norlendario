@@ -20,12 +20,23 @@
     lang: (navigator.language || "es").toLowerCase().startsWith("en") ? "en" : "es",
     theme: localStorage.getItem(THEME_KEY), // "light" | "dark" | null (follow system)
     dayIndex: 0,
+    activeView: "calendar", // "calendar" | "route" | "user"
     detail: null, // { act, day }
     user: null, // null (signed out) | "guest" | username
     favorites: new Set(),
     favoritesOnly: false,
     authMode: "login", // "login" | "signup"
-    authError: null
+    authError: null,
+    confirmingDelete: false
+  };
+
+  const NAV_ICONS = {
+    calendar:
+      '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"/></svg>',
+    route:
+      '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M15 5.1 9 3 3 5v15.9l6-2.1 6 2.1 6-2V3l-6 2.1ZM15 19l-6-2.1V5l6 2.1V19Z"/></svg>',
+    user:
+      '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12 12c2.7 0 4.9-2.2 4.9-4.9S14.7 2.2 12 2.2 7.1 4.4 7.1 7.1 9.3 12 12 12Zm0 2.4c-3.3 0-9.8 1.6-9.8 4.9V22h19.6v-2.7c0-3.3-6.5-4.9-9.8-4.9Z"/></svg>'
   };
 
   function effectiveTheme() {
@@ -41,12 +52,16 @@
     state.theme = effectiveTheme() === "dark" ? "light" : "dark";
     localStorage.setItem(THEME_KEY, state.theme);
     applyTheme();
-    renderUserBadge();
+    if (state.activeView === "user") renderUserView();
   }
 
   applyTheme();
 
   const els = {
+    calendarView: document.getElementById("calendarView"),
+    routeView: document.getElementById("routeView"),
+    userView: document.getElementById("userView"),
+    bottomNav: document.getElementById("bottomNav"),
     dayTabs: document.getElementById("dayTabs"),
     favFilterContainer: document.getElementById("favFilterContainer"),
     timeline: document.getElementById("timeline"),
@@ -460,33 +475,6 @@
     }
   }
 
-  function renderUserBadge() {
-    let badge = document.getElementById("userBadge");
-    if (!badge) {
-      badge = document.createElement("div");
-      badge.id = "userBadge";
-      badge.className = "user-badge";
-      document.querySelector(".top").appendChild(badge);
-    }
-    const guest = isGuest();
-    const label = guest ? t(state.lang, "guestLabel") : state.user;
-    const actionLabel = guest ? t(state.lang, "loginBtn") : t(state.lang, "logout");
-    const isDark = effectiveTheme() === "dark";
-
-    badge.innerHTML = `
-      <span class="user-name">${label}</span>
-      <button class="icon-btn" id="themeToggleBtn" aria-label="Toggle dark/light theme">${isDark ? "☀️" : "🌙"}</button>
-      <button class="icon-btn" id="langToggleBtn" aria-label="Switch language">${t(state.lang, "langBtn")}</button>
-      <button class="icon-btn" id="logoutBtn">${actionLabel}</button>
-    `;
-    document.getElementById("themeToggleBtn").addEventListener("click", toggleTheme);
-    document.getElementById("langToggleBtn").addEventListener("click", () => {
-      state.lang = state.lang === "es" ? "en" : "es";
-      renderAll();
-    });
-    document.getElementById("logoutBtn").addEventListener("click", handleLogout);
-  }
-
   async function handleLogout() {
     if (state.user && state.user !== "guest") {
       try {
@@ -498,20 +486,193 @@
     state.user = null;
     state.favorites = new Set();
     state.detail = null;
+    state.confirmingDelete = false;
     document.body.classList.remove("detail-open");
-    const badge = document.getElementById("userBadge");
-    if (badge) badge.remove();
     showGate();
   }
 
+  async function handleDeleteAccount() {
+    try {
+      await Api.deleteAccount();
+    } catch {
+      /* reset client state regardless — the account may already be gone */
+    }
+    state.confirmingDelete = false;
+    handleLogout();
+  }
+
+  // --- Bottom nav & Mi ruta / Usuario pages ---
+
+  function renderBottomNav() {
+    const labels = { calendar: "navCalendar", route: "navRoute", user: "navUser" };
+    els.bottomNav.innerHTML = Object.keys(NAV_ICONS)
+      .map(
+        (view) => `
+        <button class="bottom-nav-btn${state.activeView === view ? " active" : ""}" data-view="${view}">
+          ${NAV_ICONS[view]}
+          <span>${t(state.lang, labels[view])}</span>
+        </button>`
+      )
+      .join("");
+    els.bottomNav.querySelectorAll(".bottom-nav-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        state.activeView = btn.dataset.view;
+        renderAll();
+      });
+    });
+  }
+
+  function routeItems() {
+    const items = [];
+    for (const idStr of state.favorites) {
+      const [dayId, stage, artist] = idStr.split("::");
+      const day = FESTIVAL_DATA.days.find((d) => d.id === dayId);
+      const act = day && day.acts.find((a) => a.stage === stage && a.artist === artist);
+      if (day && act) items.push({ day, act });
+    }
+    const dayOrder = FESTIVAL_DATA.days.map((d) => d.id);
+    items.sort((a, b) => {
+      const dayDiff = dayOrder.indexOf(a.day.id) - dayOrder.indexOf(b.day.id);
+      if (dayDiff !== 0) return dayDiff;
+      if (a.act.tba !== b.act.tba) return a.act.tba ? 1 : -1;
+      if (a.act.tba) return 0;
+      return normalizeMinutes(a.act.time) - normalizeMinutes(b.act.time);
+    });
+    return items;
+  }
+
+  function renderRouteView() {
+    const lang = state.lang;
+
+    if (isGuest()) {
+      els.routeView.innerHTML = `
+        <div class="page-inner">
+          <h2>${t(lang, "routeTitle")}</h2>
+          <p class="empty-msg">${t(lang, "routeGuestMsg")}</p>
+          <button class="guest-btn" id="routeLoginBtn">${t(lang, "loginBtn")}</button>
+        </div>`;
+      document.getElementById("routeLoginBtn").addEventListener("click", handleLogout);
+      return;
+    }
+
+    const items = routeItems();
+    if (items.length === 0) {
+      els.routeView.innerHTML = `
+        <div class="page-inner">
+          <h2>${t(lang, "routeTitle")}</h2>
+          <p class="empty-msg">${t(lang, "routeEmptyMsg")}</p>
+        </div>`;
+      return;
+    }
+
+    let html = `<div class="page-inner"><h2>${t(lang, "routeTitle")}</h2>`;
+    let lastDayId = null;
+    items.forEach(({ day, act }, idx) => {
+      if (day.id !== lastDayId) {
+        html += `<h3 class="route-day-heading">${formatDayDate(lang, day)}</h3>`;
+        lastDayId = day.id;
+      }
+      html += `
+        <button class="route-item" data-idx="${idx}" style="--stage-color:var(${STAGE_COLOR_VARS[act.stage]})">
+          <span class="route-time">${formatTimeForDisplay(lang, act)}</span>
+          <span class="route-artist">${act.artist}</span>
+          <span class="route-stage">${act.stage}</span>
+        </button>`;
+    });
+    html += `</div>`;
+    els.routeView.innerHTML = html;
+
+    els.routeView.querySelectorAll(".route-item").forEach((el) => {
+      el.addEventListener("click", () => {
+        const { day, act } = items[Number(el.dataset.idx)];
+        openDetail(act, day);
+      });
+    });
+  }
+
+  function renderUserView() {
+    const lang = state.lang;
+    const guest = isGuest();
+    const isDark = effectiveTheme() === "dark";
+    const label = guest ? t(lang, "guestLabel") : state.user;
+
+    els.userView.innerHTML = `
+      <div class="page-inner">
+        <h2>${t(lang, "userTitle")}</h2>
+        <p class="user-current-name">${label}</p>
+
+        <div class="settings-row">
+          <span>${t(lang, "languageLabel")}</span>
+          <button class="icon-btn" id="langToggleBtn">${t(lang, "langBtn")}</button>
+        </div>
+        <div class="settings-row">
+          <span>${t(lang, "themeLabel")}</span>
+          <button class="icon-btn" id="themeToggleBtn">${isDark ? "☀️" : "🌙"} ${t(lang, isDark ? "lightModeBtn" : "darkModeBtn")}</button>
+        </div>
+
+        ${
+          guest
+            ? `<button class="guest-btn" id="userLoginBtn">${t(lang, "loginBtn")}</button>`
+            : `
+          <button class="guest-btn" id="userLogoutBtn">${t(lang, "logout")}</button>
+          <button class="danger-btn" id="userDeleteBtn">${t(lang, "deleteAccountBtn")}</button>
+          ${
+            state.confirmingDelete
+              ? `<div class="confirm-delete">
+                   <p>${t(lang, "deleteAccountConfirm")}</p>
+                   <div class="confirm-delete-actions">
+                     <button class="danger-btn" id="confirmDeleteBtn">${t(lang, "deleteAccountConfirmBtn")}</button>
+                     <button class="icon-btn" id="cancelDeleteBtn">${t(lang, "cancelBtn")}</button>
+                   </div>
+                 </div>`
+              : ""
+          }`
+        }
+      </div>
+    `;
+
+    document.getElementById("langToggleBtn").addEventListener("click", () => {
+      state.lang = state.lang === "es" ? "en" : "es";
+      renderAll();
+    });
+    document.getElementById("themeToggleBtn").addEventListener("click", toggleTheme);
+
+    if (guest) {
+      document.getElementById("userLoginBtn").addEventListener("click", handleLogout);
+    } else {
+      document.getElementById("userLogoutBtn").addEventListener("click", handleLogout);
+      document.getElementById("userDeleteBtn").addEventListener("click", () => {
+        state.confirmingDelete = true;
+        renderUserView();
+      });
+      if (state.confirmingDelete) {
+        document.getElementById("confirmDeleteBtn").addEventListener("click", handleDeleteAccount);
+        document.getElementById("cancelDeleteBtn").addEventListener("click", () => {
+          state.confirmingDelete = false;
+          renderUserView();
+        });
+      }
+    }
+  }
+
   function renderAll() {
-    const day = FESTIVAL_DATA.days[state.dayIndex];
-    renderDayTabs();
-    renderFavFilter();
-    renderTimeline(day);
-    renderTba(day);
+    renderBottomNav();
+    els.calendarView.style.display = state.activeView === "calendar" ? "" : "none";
+    els.routeView.style.display = state.activeView === "route" ? "" : "none";
+    els.userView.style.display = state.activeView === "user" ? "" : "none";
+
+    if (state.activeView === "calendar") {
+      const day = FESTIVAL_DATA.days[state.dayIndex];
+      renderDayTabs();
+      renderFavFilter();
+      renderTimeline(day);
+      renderTba(day);
+    } else if (state.activeView === "route") {
+      renderRouteView();
+    } else if (state.activeView === "user") {
+      renderUserView();
+    }
     renderDetail();
-    renderUserBadge();
   }
 
   // --- Auth gate ---

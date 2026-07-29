@@ -40,6 +40,7 @@ const addFavorite = db.prepare(
 const removeFavorite = db.prepare(
   "DELETE FROM favorites WHERE user_id = ? AND act_id = ?"
 );
+const deleteUser = db.prepare("DELETE FROM users WHERE id = ?");
 
 function requireAuth(req, res, next) {
   if (!req.session.userId) {
@@ -95,6 +96,11 @@ app.post("/api/auth/logout", (req, res) => {
 
 app.get("/api/auth/me", (req, res) => {
   res.json({ username: req.session.username || null });
+});
+
+app.delete("/api/auth/account", requireAuth, (req, res) => {
+  deleteUser.run(req.session.userId); // favorites cascade via the FK
+  req.session.destroy(() => res.status(204).end());
 });
 
 app.get("/api/favorites", requireAuth, (req, res) => {
