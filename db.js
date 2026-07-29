@@ -25,6 +25,18 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(user_id, act_id)
   );
+
+  CREATE TABLE IF NOT EXISTS artist_info (
+    name TEXT PRIMARY KEY COLLATE NOCASE,
+    bio TEXT,
+    image TEXT,
+    genres TEXT,
+    followers INTEGER,
+    spotify_url TEXT,
+    spotify_verified INTEGER NOT NULL DEFAULT 0,
+    wikipedia_url TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 module.exports = db;

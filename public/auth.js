@@ -42,17 +42,3 @@ const Api = {
     await fetch("/api/favorites/" + encodeURIComponent(actId), { method: "DELETE" });
   }
 };
-
-const GuestFavorites = {
-  key: "noroeste_favorites_guest",
-  load() {
-    try {
-      return new Set(JSON.parse(localStorage.getItem(this.key)) || []);
-    } catch {
-      return new Set();
-    }
-  },
-  save(set) {
-    localStorage.setItem(this.key, JSON.stringify(Array.from(set)));
-  }
-};

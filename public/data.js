@@ -106,3 +106,9 @@ const FESTIVAL_DATA = {
     }
   ]
 };
+
+// Dual-purpose: a plain global for the browser <script> tag, and a CommonJS
+// export so Node scripts (e.g. the artist-info sweep) can reuse the same data.
+if (typeof module !== "undefined" && module.exports) {
+  module.exports = FESTIVAL_DATA;
+}

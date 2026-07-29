@@ -9,7 +9,7 @@
 <body>
   <header class="top">
     <div class="title">
-      <h1>Festival Noroeste <span>Estrella Galicia</span></h1>
+      <h1>Festival Noroeste</h1>
       <p class="subtitle">A Coruña · 5–9 de agosto de 2026</p>
     </div>
   </header>
@@ -17,13 +17,19 @@
   <nav class="day-tabs" id="dayTabs"></nav>
 
   <main>
-    <div class="legend" id="legend"></div>
+    <div class="toolbar">
+      <div class="kofi-container">
+        <a href='https://ko-fi.com/F1F41CM0Q' target='_blank' rel="noopener noreferrer"><img height='36' style='border:0px;height:36px;' src='https://storage.ko-fi.com/cdn/kofi3.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com' /></a>
+      </div>
+      <div id="favFilterContainer"></div>
+    </div>
     <div class="timeline-scroll">
       <div class="timeline" id="timeline"></div>
     </div>
     <div class="tba-section" id="tbaSection"></div>
   </main>
 
+  <div class="artist-view-backdrop" id="artistViewBackdrop"></div>
   <div class="auth-gate" id="authGate"></div>
 
   <script src="data.js"></script>

@@ -1,8 +1,10 @@
+require("dotenv").config();
 const path = require("path");
 const express = require("express");
 const session = require("express-session");
 const bcrypt = require("bcryptjs");
 const db = require("./db");
+const { getArtistInfo } = require("./artistInfo");
 
 const app = express();
 app.set("trust proxy", 1); // Railway sits behind a TLS-terminating proxy
@@ -109,6 +111,16 @@ app.post("/api/favorites", requireAuth, (req, res) => {
 app.delete("/api/favorites/:actId", requireAuth, (req, res) => {
   removeFavorite.run(req.session.userId, req.params.actId);
   res.status(204).end();
+});
+
+app.get("/api/artist-info", async (req, res) => {
+  const name = String(req.query.name || "").trim();
+  if (!name) return res.status(400).json({ error: "name_required" });
+  try {
+    res.json(await getArtistInfo(name));
+  } catch {
+    res.status(502).json({ error: "lookup_failed" });
+  }
 });
 
 app.use(express.static(path.join(__dirname, "public")));

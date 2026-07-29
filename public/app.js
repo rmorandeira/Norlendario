@@ -13,8 +13,12 @@
   const MAX_DURATION = 90; // minutes, cap when the next act starts later than this
   const MIN_DURATION = 30; // minutes, floor so a block always stays readable
 
+  const APP_VERSION = "1.0.0";
+  const THEME_KEY = "noroeste_theme";
+
   const state = {
     lang: (navigator.language || "es").toLowerCase().startsWith("en") ? "en" : "es",
+    theme: localStorage.getItem(THEME_KEY), // "light" | "dark" | null (follow system)
     dayIndex: 0,
     detail: null, // { act, day }
     user: null, // null (signed out) | "guest" | username
@@ -24,16 +28,40 @@
     authError: null
   };
 
+  function effectiveTheme() {
+    return state.theme || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+  }
+
+  function applyTheme() {
+    if (state.theme) document.documentElement.dataset.theme = state.theme;
+    else delete document.documentElement.dataset.theme;
+  }
+
+  function toggleTheme() {
+    state.theme = effectiveTheme() === "dark" ? "light" : "dark";
+    localStorage.setItem(THEME_KEY, state.theme);
+    applyTheme();
+    renderUserBadge();
+  }
+
+  applyTheme();
+
   const els = {
     dayTabs: document.getElementById("dayTabs"),
-    legend: document.getElementById("legend"),
+    favFilterContainer: document.getElementById("favFilterContainer"),
     timeline: document.getElementById("timeline"),
     tbaSection: document.getElementById("tbaSection"),
-    authGate: document.getElementById("authGate")
+    authGate: document.getElementById("authGate"),
+    artistViewBackdrop: document.getElementById("artistViewBackdrop")
   };
+  els.artistViewBackdrop.addEventListener("click", () => closeDetail());
 
   function actId(day, act) {
     return day.id + "::" + act.stage + "::" + act.artist;
+  }
+
+  function isGuest() {
+    return state.user === "guest";
   }
 
   function isFavorite(day, act) {
@@ -46,16 +74,12 @@
     if (willFavorite) state.favorites.add(id);
     else state.favorites.delete(id);
 
-    if (state.user === "guest") {
-      GuestFavorites.save(state.favorites);
-    } else {
-      try {
-        if (willFavorite) await Api.addFavorite(id);
-        else await Api.removeFavorite(id);
-      } catch {
-        if (willFavorite) state.favorites.delete(id);
-        else state.favorites.add(id);
-      }
+    try {
+      if (willFavorite) await Api.addFavorite(id);
+      else await Api.removeFavorite(id);
+    } catch {
+      if (willFavorite) state.favorites.delete(id);
+      else state.favorites.add(id);
     }
 
     const day2 = FESTIVAL_DATA.days[state.dayIndex];
@@ -98,6 +122,10 @@
   function formatTimeForDisplay(lang, act) {
     if (act.tba) return t(lang, "timeTBA");
     return act.time + "h";
+  }
+
+  function mapsUrl(stage) {
+    return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(stage + ", A Coruña, España");
   }
 
   function stagesWithActs(day) {
@@ -154,40 +182,19 @@
       });
       els.dayTabs.appendChild(btn);
     });
-
-    const langBtn = document.createElement("button");
-    langBtn.className = "lang-toggle";
-    langBtn.textContent = t(state.lang, "langBtn");
-    langBtn.setAttribute("aria-label", "Switch language");
-    langBtn.addEventListener("click", () => {
-      state.lang = state.lang === "es" ? "en" : "es";
-      renderAll();
-    });
-    els.dayTabs.appendChild(langBtn);
   }
 
-  function renderLegend(day) {
-    els.legend.innerHTML = "";
-    const title = document.createElement("span");
-    title.className = "legend-title";
-    title.textContent = t(state.lang, "stages");
-    els.legend.appendChild(title);
-
-    stagesWithActs(day).forEach((stage) => {
-      const chip = document.createElement("span");
-      chip.className = "legend-chip";
-      chip.innerHTML = `<i style="background:var(${STAGE_COLOR_VARS[stage]})"></i>${stage}`;
-      els.legend.appendChild(chip);
-    });
-
+  function renderFavFilter() {
+    els.favFilterContainer.innerHTML = "";
+    if (isGuest()) return; // favorites are an account-only feature
     const favBtn = document.createElement("button");
     favBtn.className = "fav-filter-btn" + (state.favoritesOnly ? " active" : "");
-    favBtn.innerHTML = `★ ${t(state.lang, "favoritesOnlyBtn")}`;
+    favBtn.innerHTML = `★ ${t(state.lang, state.favoritesOnly ? "favHideBtn" : "favShowBtn")}`;
     favBtn.addEventListener("click", () => {
       state.favoritesOnly = !state.favoritesOnly;
       renderAll();
     });
-    els.legend.appendChild(favBtn);
+    els.favFilterContainer.appendChild(favBtn);
   }
 
   function renderTimeline(day) {
@@ -207,11 +214,6 @@
     els.timeline.style.setProperty("--total-hours", totalHours);
 
     // hint
-    const hint = document.createElement("p");
-    hint.className = "tap-hint";
-    hint.textContent = t(state.lang, "tapHint");
-    els.timeline.appendChild(hint);
-
     const grid = document.createElement("div");
     grid.className = "grid";
     grid.style.setProperty("--total-hours", totalHours);
@@ -253,7 +255,7 @@
           el.style.setProperty("--dur", block.duration / 60);
           el.style.setProperty("--stage-color", `var(${STAGE_COLOR_VARS[stage]})`);
           el.innerHTML = `<span class="act-time">${block.time}</span><span class="act-name">${block.artist}</span>`;
-          el.appendChild(starButton(day, block));
+          if (!isGuest()) el.appendChild(starButton(day, block));
           el.addEventListener("click", () => openDetail(block, day));
           el.addEventListener("keydown", (e) => {
             if (e.key === "Enter" || e.key === " ") {
@@ -295,7 +297,7 @@
       chip.setAttribute("role", "button");
       chip.style.setProperty("--stage-color", `var(${STAGE_COLOR_VARS[act.stage]})`);
       chip.innerHTML = `<i style="background:var(${STAGE_COLOR_VARS[act.stage]})"></i>${act.artist} <span class="tba-stage">· ${act.stage}</span>`;
-      chip.appendChild(starButton(day, act));
+      if (!isGuest()) chip.appendChild(starButton(day, act));
       chip.addEventListener("click", () => openDetail(act, day));
       chip.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") {
@@ -309,9 +311,10 @@
   }
 
   function openDetail(act, day) {
-    state.detail = { act, day };
+    state.detail = { act, day, extra: null, extraStatus: "loading" };
     renderDetail();
     document.body.classList.add("detail-open");
+    loadArtistExtra(act.artist);
   }
 
   function closeDetail() {
@@ -333,35 +336,105 @@
     }
     const { act, day } = state.detail;
     const lang = state.lang;
-    const spotifyUrl = "https://open.spotify.com/search/" + encodeURIComponent(act.artist);
+    const spotifyUrl = (state.detail.extra && state.detail.extra.spotifyUrl) || "https://open.spotify.com/search/" + encodeURIComponent(act.artist);
     const fav = isFavorite(day, act);
+    const starHTML = isGuest()
+      ? ""
+      : `<button class="star-btn detail-star${fav ? " is-fav" : ""}" id="detailStarBtn" aria-label="${t(lang, fav ? "favoriteRemove" : "favoriteAdd")}">
+          <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" d="M12 3.5l2.47 5.15 5.53.76-4 3.98.95 5.61L12 16.3l-4.95 2.7.95-5.61-4-3.98 5.53-.76z"/></svg>
+        </button>`;
 
     panel.innerHTML = `
       <div class="artist-view-inner">
         <button class="back-btn" id="backBtn">&larr; ${t(lang, "back")}</button>
         <div class="artist-card">
-          <span class="stage-pill" style="background:var(${STAGE_COLOR_VARS[act.stage]})">${act.stage}</span>
+          <div class="artist-card-header">
+            ${starHTML}
+            <span class="stage-pill" style="background:var(${STAGE_COLOR_VARS[act.stage]})">${act.stage}</span>
+          </div>
           <h2>${act.artist}</h2>
-          <dl class="artist-meta">
-            <div><dt>${t(lang, "day")}</dt><dd>${formatDayDate(lang, day)}</dd></div>
-            <div><dt>${t(lang, "schedule")}</dt><dd>${formatTimeForDisplay(lang, act)}</dd></div>
-            <div><dt>${t(lang, "stage")}</dt><dd>${act.stage}</dd></div>
-          </dl>
+          <div class="event-meta">
+            <div class="event-date">${formatDayDate(lang, day)}</div>
+            <div class="event-time">${formatTimeForDisplay(lang, act)}</div>
+            <a class="event-venue" href="${mapsUrl(act.stage)}" target="_blank" rel="noopener noreferrer">${act.stage}</a>
+          </div>
+          <div class="artist-extra" id="artistExtra">${renderArtistExtraHTML()}</div>
           <div class="detail-actions">
-            <a class="spotify-btn" href="${spotifyUrl}" target="_blank" rel="noopener noreferrer">
+            <a class="spotify-btn" id="spotifyBtn" href="${spotifyUrl}" target="_blank" rel="noopener noreferrer">
               <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm4.59 14.4a.62.62 0 0 1-.86.21c-2.36-1.44-5.34-1.77-8.84-.97a.63.63 0 1 1-.28-1.23c3.83-.87 7.12-.5 9.77 1.12a.63.63 0 0 1 .21.87Zm1.22-2.72a.78.78 0 0 1-1.07.26c-2.7-1.66-6.82-2.14-10.02-1.17a.78.78 0 1 1-.45-1.49c3.65-1.11 8.19-.57 11.28 1.33a.78.78 0 0 1 .26 1.07Zm.11-2.83c-3.24-1.92-8.6-2.1-11.7-1.16a.94.94 0 1 1-.55-1.8c3.56-1.08 9.46-.87 13.19 1.34a.94.94 0 0 1-.94 1.62Z"/></svg>
               ${t(lang, "spotifyBtn")}
             </a>
-            <button class="star-btn detail-star${fav ? " is-fav" : ""}" id="detailStarBtn" aria-label="${t(lang, fav ? "favoriteRemove" : "favoriteAdd")}">
-              <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" d="M12 3.5l2.47 5.15 5.53.76-4 3.98.95 5.61L12 16.3l-4.95 2.7.95-5.61-4-3.98 5.53-.76z"/></svg>
-            </button>
           </div>
-          <p class="spotify-note">${t(lang, "spotifyNote")}</p>
         </div>
       </div>
     `;
     document.getElementById("backBtn").addEventListener("click", closeDetail);
-    document.getElementById("detailStarBtn").addEventListener("click", () => toggleFavorite(day, act));
+    const starBtn = document.getElementById("detailStarBtn");
+    if (starBtn) starBtn.addEventListener("click", () => toggleFavorite(day, act));
+  }
+
+  function renderArtistExtraHTML() {
+    const lang = state.lang;
+    const status = state.detail.extraStatus;
+    const extra = state.detail.extra;
+
+    if (status === "loading") {
+      return `<p class="extra-status">${t(lang, "extraLoading")}</p>`;
+    }
+    if (status === "error") {
+      return `<p class="extra-status">${t(lang, "noExtraInfo")}</p>`;
+    }
+
+    const hasBio = extra && extra.bio;
+    const hasImage = extra && extra.image;
+    const hasEvents = extra && extra.events && extra.events.length > 0;
+
+    if (!hasBio && !hasImage && !hasEvents) {
+      return `<p class="extra-status">${t(lang, "noExtraInfo")}</p>`;
+    }
+
+    let html = "";
+    if (hasImage) {
+      html += `<img class="artist-photo" src="${extra.image}" alt="${state.detail.act.artist}" loading="lazy" />`;
+    }
+    if (hasBio) {
+      const bio = extra.bio.length > 320 ? extra.bio.slice(0, 320).trim() + "…" : extra.bio;
+      html += `<p class="artist-bio">${bio}</p>`;
+      if (extra.wikipediaUrl) {
+        html += `<a class="wikipedia-link" href="${extra.wikipediaUrl}" target="_blank" rel="noopener noreferrer">${t(lang, "wikipediaLink")}</a>`;
+      }
+    }
+    if (hasEvents) {
+      html += `<h3 class="upcoming-shows-title">${t(lang, "upcomingShowsTitle")}</h3><ul class="upcoming-shows">`;
+      html += extra.events
+        .map((ev) => {
+          const date = ev.date ? new Date(ev.date).toLocaleDateString(lang === "en" ? "en-GB" : "es-ES") : "";
+          const place = [ev.venue, ev.city].filter(Boolean).join(" · ");
+          return `<li><a href="${ev.url}" target="_blank" rel="noopener noreferrer"><span class="show-date">${date}</span> ${place}</a></li>`;
+        })
+        .join("");
+      html += `</ul>`;
+    }
+    return html;
+  }
+
+  async function loadArtistExtra(artistName) {
+    try {
+      const r = await fetch("/api/artist-info?name=" + encodeURIComponent(artistName));
+      const data = await r.json();
+      if (!state.detail || state.detail.act.artist !== artistName) return;
+      state.detail.extra = data;
+      state.detail.extraStatus = "loaded";
+    } catch {
+      if (!state.detail || state.detail.act.artist !== artistName) return;
+      state.detail.extraStatus = "error";
+    }
+    const container = document.getElementById("artistExtra");
+    if (container) container.innerHTML = renderArtistExtraHTML();
+    const spotifyBtn = document.getElementById("spotifyBtn");
+    if (spotifyBtn && state.detail.extra && state.detail.extra.spotifyUrl) {
+      spotifyBtn.href = state.detail.extra.spotifyUrl;
+    }
   }
 
   function renderHeader() {
@@ -376,8 +449,22 @@
       badge.className = "user-badge";
       document.querySelector(".top").appendChild(badge);
     }
-    const label = state.user === "guest" ? t(state.lang, "guestLabel") : state.user;
-    badge.innerHTML = `<span class="user-name">${label}</span><button class="logout-btn" id="logoutBtn">${t(state.lang, "logout")}</button>`;
+    const guest = isGuest();
+    const label = guest ? t(state.lang, "guestLabel") : state.user;
+    const actionLabel = guest ? t(state.lang, "loginBtn") : t(state.lang, "logout");
+    const isDark = effectiveTheme() === "dark";
+
+    badge.innerHTML = `
+      <span class="user-name">${label}</span>
+      <button class="icon-btn" id="themeToggleBtn" aria-label="Toggle dark/light theme">${isDark ? "☀️" : "🌙"}</button>
+      <button class="icon-btn" id="langToggleBtn" aria-label="Switch language">${t(state.lang, "langBtn")}</button>
+      <button class="icon-btn" id="logoutBtn">${actionLabel}</button>
+    `;
+    document.getElementById("themeToggleBtn").addEventListener("click", toggleTheme);
+    document.getElementById("langToggleBtn").addEventListener("click", () => {
+      state.lang = state.lang === "es" ? "en" : "es";
+      renderAll();
+    });
     document.getElementById("logoutBtn").addEventListener("click", handleLogout);
   }
 
@@ -402,7 +489,7 @@
     const day = FESTIVAL_DATA.days[state.dayIndex];
     renderHeader();
     renderDayTabs();
-    renderLegend(day);
+    renderFavFilter();
     renderTimeline(day);
     renderTba(day);
     renderDetail();
@@ -417,7 +504,11 @@
     els.authGate.innerHTML = `
       <div class="gate-card">
         <h1>${t(lang, "gateTitle")}</h1>
-        <p class="gate-subtitle">${t(lang, "gateSubtitle")}</p>
+        <div class="auth-tabs">
+          <button type="button" class="auth-tab${!isSignup ? " active" : ""}" data-mode="login">${t(lang, "loginBtn")}</button>
+          <button type="button" class="auth-tab${isSignup ? " active" : ""}" data-mode="signup">${t(lang, "signupBtn")}</button>
+        </div>
+        <p class="gate-subtitle">${t(lang, isSignup ? "gateSubtitleSignup" : "gateSubtitleLogin")}</p>
         <form id="authForm" novalidate>
           <label>${t(lang, "usernameLabel")}
             <input type="text" name="username" autocomplete="username" required minlength="3" maxlength="32" />
@@ -425,20 +516,29 @@
           <label>${t(lang, "passwordLabel")}
             <input type="password" name="password" autocomplete="${isSignup ? "new-password" : "current-password"}" required minlength="4" />
           </label>
+          ${
+            isSignup
+              ? `<label>${t(lang, "confirmPasswordLabel")}
+            <input type="password" name="confirmPassword" autocomplete="new-password" required minlength="4" />
+          </label>`
+              : ""
+          }
           ${state.authError ? `<p class="auth-error">${state.authError}</p>` : ""}
           <button type="submit" class="auth-submit">${t(lang, isSignup ? "signupBtn" : "loginBtn")}</button>
         </form>
-        <button class="auth-toggle-mode" id="authToggleMode">${t(lang, isSignup ? "toggleToLogin" : "toggleToSignup")}</button>
         <div class="gate-divider"><span>${t(lang, "orDivider")}</span></div>
         <button class="guest-btn" id="guestBtn">${t(lang, "guestBtn")}</button>
+        <p class="gate-disclaimer">${t(lang, "unofficialDisclaimer")}<br />v${APP_VERSION}</p>
       </div>
     `;
 
     document.getElementById("authForm").addEventListener("submit", handleAuthSubmit);
-    document.getElementById("authToggleMode").addEventListener("click", () => {
-      state.authMode = isSignup ? "login" : "signup";
-      state.authError = null;
-      renderGate();
+    els.authGate.querySelectorAll(".auth-tab").forEach((tabBtn) => {
+      tabBtn.addEventListener("click", () => {
+        state.authMode = tabBtn.dataset.mode;
+        state.authError = null;
+        renderGate();
+      });
     });
     document.getElementById("guestBtn").addEventListener("click", handleGuestLogin);
   }
@@ -447,6 +547,7 @@
     const map = {
       username_length: "errUsernameLength",
       password_length: "errPasswordLength",
+      password_mismatch: "errPasswordMismatch",
       username_taken: "errUsernameTaken",
       invalid_credentials: "errInvalidCredentials"
     };
@@ -459,6 +560,12 @@
     const username = form.username.value.trim();
     const password = form.password.value;
     const isSignup = state.authMode === "signup";
+
+    if (isSignup && password !== form.confirmPassword.value) {
+      state.authError = authErrorMessage(new Error("password_mismatch"));
+      renderGate();
+      return;
+    }
 
     try {
       const data = isSignup ? await Api.signup(username, password) : await Api.login(username, password);
@@ -475,7 +582,7 @@
 
   function handleGuestLogin() {
     state.user = "guest";
-    state.favorites = GuestFavorites.load();
+    state.favorites = new Set(); // favorites are an account-only feature
     state.authError = null;
     hideGate();
     renderAll();
