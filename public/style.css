@@ -858,9 +858,9 @@ body.gate-open main {
 .route-item {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 12px;
   width: 100%;
-  padding: 12px;
+  padding: 10px;
   margin-bottom: 8px;
   border-radius: 10px;
   border: 1px solid var(--border);
@@ -871,18 +871,43 @@ body.gate-open main {
   text-align: left;
   cursor: pointer;
 }
-.route-time {
+.route-thumb {
   flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  border-radius: 8px;
+  background-color: var(--gridline);
+  background-size: cover;
+  background-position: center;
+}
+.route-item-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.route-item-top {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+.route-time {
   color: var(--ink-muted);
   font-size: 0.85rem;
   font-variant-numeric: tabular-nums;
 }
+.route-duration {
+  color: var(--ink-muted);
+  font-size: 0.78rem;
+}
 .route-artist {
-  flex: 1 1 auto;
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .route-stage {
-  flex: 0 0 auto;
   color: var(--ink-muted);
   font-size: 0.85rem;
 }

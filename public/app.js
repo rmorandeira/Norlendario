@@ -190,6 +190,32 @@
     return { byStage, blocks, rangeStartHour, rangeEndHour, stages: Object.keys(byStage) };
   }
 
+  function estimatedDurationFor(day, act) {
+    if (act.tba) return null;
+    const block = computeLayout(day).blocks.find((b) => b.stage === act.stage && b.time === act.time && b.artist === act.artist);
+    return block ? block.duration : null;
+  }
+
+  const artistInfoCache = new Map(); // artist name -> info object, reused across route-item thumbnails
+
+  async function loadArtistThumb(containerId, artistName) {
+    let info = artistInfoCache.get(artistName);
+    if (!info) {
+      try {
+        const r = await fetch("/api/artist-info?name=" + encodeURIComponent(artistName));
+        info = await r.json();
+      } catch {
+        info = {};
+      }
+      artistInfoCache.set(artistName, info);
+    }
+    const el = document.getElementById(containerId);
+    if (el && info.image) {
+      el.style.backgroundImage = `url("${info.image}")`;
+      el.classList.remove("route-thumb-empty");
+    }
+  }
+
   function renderDayTabs() {
     els.dayTabs.innerHTML = "";
     FESTIVAL_DATA.days.forEach((day, i) => {
@@ -569,6 +595,7 @@
     let lastDayId = null;
     let lastAct = null;
     const connectors = [];
+    const thumbs = [];
 
     items.forEach(({ day, act }, idx) => {
       const sameDay = day.id === lastDayId;
@@ -579,11 +606,20 @@
         connectors.push({ id: connectorId, from: lastAct.stage, to: act.stage });
         html += `<div class="route-connector" id="${connectorId}"></div>`;
       }
+      const thumbId = "routeThumb-" + idx;
+      thumbs.push({ id: thumbId, artist: act.artist });
+      const duration = estimatedDurationFor(day, act);
       html += `
         <button class="route-item" data-idx="${idx}" style="--stage-color:var(${STAGE_COLOR_VARS[act.stage]})">
-          <span class="route-time">${formatTimeForDisplay(lang, act)}</span>
-          <span class="route-artist">${act.artist}</span>
-          <span class="route-stage">${act.stage}</span>
+          <div class="route-thumb route-thumb-empty" id="${thumbId}"></div>
+          <span class="route-item-main">
+            <span class="route-item-top">
+              <span class="route-time">${formatTimeForDisplay(lang, act)}</span>
+              ${duration ? `<span class="route-duration">· ${t(lang, "routeDurationMin").replace("{min}", duration)}</span>` : ""}
+            </span>
+            <span class="route-artist">${act.artist}</span>
+            <span class="route-stage">${act.stage}</span>
+          </span>
         </button>`;
       lastDayId = day.id;
       lastAct = act;
@@ -599,6 +635,7 @@
     });
 
     connectors.forEach(({ id, from, to }) => loadRouteConnector(id, from, to));
+    thumbs.forEach(({ id, artist }) => loadArtistThumb(id, artist));
   }
 
   async function loadRouteConnector(containerId, from, to) {
