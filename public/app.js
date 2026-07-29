@@ -373,6 +373,15 @@
     if (starBtn) starBtn.addEventListener("click", () => toggleFavorite(day, act));
   }
 
+  function formatGenres(genres) {
+    return genres.map((g) => g.replace(/\b\w/g, (c) => c.toUpperCase())).join(", ");
+  }
+
+  function formatFollowers(lang, n) {
+    const formatted = new Intl.NumberFormat(lang === "en" ? "en-US" : "es-ES").format(n);
+    return lang === "en" ? `${formatted} followers on Spotify` : `${formatted} seguidores en Spotify`;
+  }
+
   function renderArtistExtraHTML() {
     const lang = state.lang;
     const status = state.detail.extraStatus;
@@ -385,11 +394,12 @@
       return `<p class="extra-status">${t(lang, "noExtraInfo")}</p>`;
     }
 
-    const hasBio = extra && extra.bio;
+    const hasGenres = extra && extra.genres && extra.genres.length > 0;
+    const hasFollowers = extra && typeof extra.followers === "number";
     const hasImage = extra && extra.image;
     const hasEvents = extra && extra.events && extra.events.length > 0;
 
-    if (!hasBio && !hasImage && !hasEvents) {
+    if (!hasGenres && !hasFollowers && !hasImage && !hasEvents) {
       return `<p class="extra-status">${t(lang, "noExtraInfo")}</p>`;
     }
 
@@ -397,12 +407,11 @@
     if (hasImage) {
       html += `<img class="artist-photo" src="${extra.image}" alt="${state.detail.act.artist}" loading="lazy" />`;
     }
-    if (hasBio) {
-      const bio = extra.bio.length > 320 ? extra.bio.slice(0, 320).trim() + "…" : extra.bio;
-      html += `<p class="artist-bio">${bio}</p>`;
-      if (extra.wikipediaUrl) {
-        html += `<a class="wikipedia-link" href="${extra.wikipediaUrl}" target="_blank" rel="noopener noreferrer">${t(lang, "wikipediaLink")}</a>`;
-      }
+    if (hasGenres || hasFollowers) {
+      const parts = [];
+      if (hasGenres) parts.push(formatGenres(extra.genres));
+      if (hasFollowers) parts.push(formatFollowers(lang, extra.followers));
+      html += `<p class="artist-description">${parts.join(" · ")}</p>`;
     }
     if (hasEvents) {
       html += `<h3 class="upcoming-shows-title">${t(lang, "upcomingShowsTitle")}</h3><ul class="upcoming-shows">`;

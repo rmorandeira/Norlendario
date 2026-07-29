@@ -28,15 +28,19 @@ db.exec(`
 
   CREATE TABLE IF NOT EXISTS artist_info (
     name TEXT PRIMARY KEY COLLATE NOCASE,
-    bio TEXT,
     image TEXT,
     genres TEXT,
     followers INTEGER,
     spotify_url TEXT,
     spotify_verified INTEGER NOT NULL DEFAULT 0,
-    wikipedia_url TEXT,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `);
+
+// Drop columns from an older schema version, if this DB predates the switch
+// to Spotify-only artist info (no bio/description scraped from the web).
+const existingColumns = db.prepare("PRAGMA table_info(artist_info)").all().map((c) => c.name);
+if (existingColumns.includes("bio")) db.exec("ALTER TABLE artist_info DROP COLUMN bio");
+if (existingColumns.includes("wikipedia_url")) db.exec("ALTER TABLE artist_info DROP COLUMN wikipedia_url");
 
 module.exports = db;

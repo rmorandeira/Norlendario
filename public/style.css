@@ -597,15 +597,11 @@ body.detail-open .artist-view {
   margin-bottom: 12px;
   object-fit: cover;
 }
-.artist-bio {
+.artist-description {
   font-size: 0.88rem;
   line-height: 1.5;
   color: var(--ink-2);
   margin: 0 0 6px;
-}
-.wikipedia-link {
-  font-size: 0.78rem;
-  color: var(--stage-1);
 }
 .upcoming-shows-title {
   font-size: 0.9rem;

@@ -17,7 +17,6 @@ const I18N = {
     spotifyBtn: "Escuchar en Spotify",
     extraLoading: "Buscando información…",
     noExtraInfo: "No se encontró información adicional para este artista.",
-    wikipediaLink: "Ver en Wikipedia",
     upcomingShowsTitle: "Próximos conciertos",
     langBtn: "EN",
 
@@ -63,7 +62,6 @@ const I18N = {
     spotifyBtn: "Listen on Spotify",
     extraLoading: "Looking up more info…",
     noExtraInfo: "No extra information found for this artist.",
-    wikipediaLink: "View on Wikipedia",
     upcomingShowsTitle: "Upcoming shows",
     langBtn: "ES",
 
