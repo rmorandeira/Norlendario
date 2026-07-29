@@ -105,16 +105,6 @@ body {
   line-height: 1.2;
 }
 
-.title h1 span {
-  color: var(--ink-2);
-  font-weight: 500;
-}
-
-.subtitle {
-  margin: 4px 0 0;
-  color: var(--ink-2);
-  font-size: 0.85rem;
-}
 
 .day-tabs {
   position: sticky;

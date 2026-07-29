@@ -1,6 +1,5 @@
 const I18N = {
   es: {
-    subtitle: "A Coruña · 5–9 de agosto de 2026",
     month: "agosto",
     weekdays: {
       wednesday: "Miércoles",
@@ -45,7 +44,6 @@ const I18N = {
     favoriteRemove: "Quitar de favoritos"
   },
   en: {
-    subtitle: "A Coruña · August 5–9, 2026",
     month: "August",
     weekdays: {
       wednesday: "Wednesday",

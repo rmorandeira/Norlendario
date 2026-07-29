@@ -460,10 +460,6 @@
     }
   }
 
-  function renderHeader() {
-    document.querySelector(".subtitle").textContent = t(state.lang, "subtitle");
-  }
-
   function renderUserBadge() {
     let badge = document.getElementById("userBadge");
     if (!badge) {
@@ -510,7 +506,6 @@
 
   function renderAll() {
     const day = FESTIVAL_DATA.days[state.dayIndex];
-    renderHeader();
     renderDayTabs();
     renderFavFilter();
     renderTimeline(day);
