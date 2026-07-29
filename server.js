@@ -6,6 +6,7 @@ const bcrypt = require("bcryptjs");
 const db = require("./db");
 const { getArtistInfo, fetchAndStoreArtistInfo } = require("./artistInfo");
 const { STAGE_COORDS, getRoute, fetchAndStoreRoute } = require("./routes");
+const schedule = require("./schedule");
 const FESTIVAL_DATA = require("./public/data.js");
 
 const app = express();
@@ -42,10 +43,26 @@ const removeFavorite = db.prepare(
   "DELETE FROM favorites WHERE user_id = ? AND act_id = ?"
 );
 const deleteUser = db.prepare("DELETE FROM users WHERE id = ?");
+const listUsersStmt = db.prepare(`
+  SELECT users.id, users.username, users.created_at, COUNT(favorites.id) AS favorite_count
+  FROM users
+  LEFT JOIN favorites ON favorites.user_id = users.id
+  GROUP BY users.id
+  ORDER BY users.created_at DESC
+`);
+const deleteUserByIdStmt = db.prepare("DELETE FROM users WHERE id = ?");
 
 function requireAuth(req, res, next) {
   if (!req.session.userId) {
     return res.status(401).json({ error: "unauthenticated" });
+  }
+  next();
+}
+
+function requireAdmin(req, res, next) {
+  const expected = process.env.ADMIN_SECRET;
+  if (!expected || req.get("x-admin-secret") !== expected) {
+    return res.status(401).json({ error: "unauthorized" });
   }
   next();
 }
@@ -140,15 +157,13 @@ app.get("/api/route-between", (req, res) => {
   res.json(getRoute(from, to));
 });
 
-// One-off remote trigger for scripts/sweep-routes.js — precomputes walking
-// time + route geometry between every stage pair. Same guard as the
-// artist sweep below.
-app.post("/api/admin/sweep-routes", async (req, res) => {
-  const expected = process.env.ADMIN_SECRET;
-  if (!expected || req.get("x-admin-secret") !== expected) {
-    return res.status(401).json({ error: "unauthorized" });
-  }
+app.get("/api/festival-data", (req, res) => {
+  res.json(schedule.getFestivalData());
+});
 
+// One-off remote trigger for scripts/sweep-routes.js — precomputes walking
+// time + route geometry between every stage pair.
+app.post("/api/admin/sweep-routes", requireAdmin, async (req, res) => {
   const stages = Object.keys(STAGE_COORDS);
   const results = [];
   for (let i = 0; i < stages.length; i++) {
@@ -161,23 +176,14 @@ app.post("/api/admin/sweep-routes", async (req, res) => {
       }
     }
   }
-
   res.json({ swept: results.length, results });
 });
 
 // One-off remote trigger for the same sweep scripts/sweep-artists.js does
 // locally — lets us pre-fill artist_info on a host (e.g. Railway) we can't
-// SSH into directly. Fails closed if ADMIN_SECRET isn't configured.
-app.post("/api/admin/sweep-artists", async (req, res) => {
-  const expected = process.env.ADMIN_SECRET;
-  if (!expected || req.get("x-admin-secret") !== expected) {
-    return res.status(401).json({ error: "unauthorized" });
-  }
-
-  const names = new Set();
-  for (const day of FESTIVAL_DATA.days) {
-    for (const act of day.acts) names.add(act.artist);
-  }
+// SSH into directly.
+app.post("/api/admin/sweep-artists", requireAdmin, async (req, res) => {
+  const names = new Set(schedule.listActsForAdmin().map((a) => a.artist));
 
   const results = [];
   for (const name of names) {
@@ -190,6 +196,75 @@ app.post("/api/admin/sweep-artists", async (req, res) => {
   }
 
   res.json({ swept: results.length, results });
+});
+
+app.get("/api/admin/artists", requireAdmin, (req, res) => {
+  const rows = db.prepare("SELECT * FROM artist_info ORDER BY name COLLATE NOCASE").all();
+  res.json(
+    rows.map((r) => ({
+      name: r.name,
+      image: r.image,
+      genres: r.genres ? JSON.parse(r.genres) : [],
+      followers: r.followers,
+      spotifyUrl: r.spotify_url,
+      spotifyVerified: Boolean(r.spotify_verified),
+      updatedAt: r.updated_at
+    }))
+  );
+});
+
+app.post("/api/admin/artists/:name/regenerate", requireAdmin, async (req, res) => {
+  try {
+    const info = await fetchAndStoreArtistInfo(req.params.name);
+    res.json(info);
+  } catch (err) {
+    res.status(502).json({ error: err.message });
+  }
+});
+
+app.get("/api/admin/users", requireAdmin, (req, res) => {
+  res.json(
+    listUsersStmt.all().map((r) => ({
+      id: r.id,
+      username: r.username,
+      createdAt: r.created_at,
+      favoriteCount: r.favorite_count
+    }))
+  );
+});
+
+app.delete("/api/admin/users/:id", requireAdmin, (req, res) => {
+  deleteUserByIdStmt.run(req.params.id); // favorites cascade via the FK
+  res.status(204).end();
+});
+
+app.get("/api/admin/days", requireAdmin, (req, res) => {
+  res.json(schedule.listDays());
+});
+
+app.get("/api/admin/acts", requireAdmin, (req, res) => {
+  res.json(schedule.listActsForAdmin());
+});
+
+app.post("/api/admin/acts", requireAdmin, (req, res) => {
+  const { dayId, artist, stage, time, tba } = req.body;
+  if (!dayId || !artist || !stage) {
+    return res.status(400).json({ error: "day_artist_stage_required" });
+  }
+  res.status(201).json(schedule.createAct({ dayId, artist, stage, time: time || null, tba: Boolean(tba) }));
+});
+
+app.put("/api/admin/acts/:id", requireAdmin, (req, res) => {
+  const { dayId, artist, stage, time, tba } = req.body;
+  if (!dayId || !artist || !stage) {
+    return res.status(400).json({ error: "day_artist_stage_required" });
+  }
+  res.json(schedule.updateAct(req.params.id, { dayId, artist, stage, time: time || null, tba: Boolean(tba) }));
+});
+
+app.delete("/api/admin/acts/:id", requireAdmin, (req, res) => {
+  schedule.deleteAct(req.params.id);
+  res.status(204).end();
 });
 
 app.use(express.static(path.join(__dirname, "public")));

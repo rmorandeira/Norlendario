@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Norlendario — Backoffice</title>
+<link rel="stylesheet" href="style.css" />
+<link rel="stylesheet" href="admin.css" />
+</head>
+<body class="admin-body">
+  <div id="adminGate" class="admin-gate">
+    <div class="admin-gate-card">
+      <h1>Backoffice</h1>
+      <p>Introduce el ADMIN_SECRET del servidor para continuar.</p>
+      <input type="password" id="adminSecretInput" placeholder="ADMIN_SECRET" />
+      <button id="adminSecretSubmit" class="auth-submit">Entrar</button>
+      <p class="admin-gate-error" id="adminGateError"></p>
+    </div>
+  </div>
+
+  <div id="adminApp" class="admin-app" style="display: none">
+    <header class="admin-header">
+      <h1>Norlendario · Backoffice</h1>
+      <nav class="admin-tabs" id="adminTabs">
+        <button data-tab="acts" class="admin-tab active">Programación</button>
+        <button data-tab="artists" class="admin-tab">Artistas</button>
+        <button data-tab="users" class="admin-tab">Usuarios</button>
+      </nav>
+    </header>
+    <main id="adminMain" class="admin-main"></main>
+  </div>
+
+  <script src="data.js"></script>
+  <script src="admin.js"></script>
+</body>
+</html>

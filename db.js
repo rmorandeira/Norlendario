@@ -44,6 +44,22 @@ db.exec(`
     geometry TEXT,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS festival_days (
+    id TEXT PRIMARY KEY,
+    weekday TEXT NOT NULL,
+    date_num INTEGER NOT NULL,
+    sort_order INTEGER NOT NULL
+  );
+
+  CREATE TABLE IF NOT EXISTS festival_acts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    day_id TEXT NOT NULL REFERENCES festival_days(id) ON DELETE CASCADE,
+    artist TEXT NOT NULL,
+    stage TEXT NOT NULL,
+    time TEXT,
+    tba INTEGER NOT NULL DEFAULT 0
+  );
 `);
 
 // Drop columns from an older schema version, if this DB predates the switch

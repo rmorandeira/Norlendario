@@ -150,8 +150,13 @@
   // Row height is capped to whatever the busiest day would get, so a
   // single-stage day doesn't stretch its row to fill the whole viewport —
   // it keeps the same row size as every other day and just leaves the
-  // leftover space blank.
-  const MAX_STAGES_PER_DAY = Math.max(...FESTIVAL_DATA.days.map((d) => stagesWithActs(d).length || 1));
+  // leftover space blank. Recomputed after loadFestivalData() replaces
+  // FESTIVAL_DATA.days with the DB-sourced (and admin-editable) lineup.
+  let maxStagesPerDay = 1;
+  function recomputeMaxStagesPerDay() {
+    maxStagesPerDay = Math.max(...FESTIVAL_DATA.days.map((d) => stagesWithActs(d).length || 1));
+  }
+  recomputeMaxStagesPerDay();
 
   function computeLayout(day) {
     const timedActs = day.acts.filter((a) => !a.tba);
@@ -324,7 +329,7 @@
   function capRowHeight(grid, ruler) {
     const available = grid.clientHeight - ruler.clientHeight;
     if (available <= 0) return;
-    const maxRowHeight = Math.floor(available / MAX_STAGES_PER_DAY);
+    const maxRowHeight = Math.floor(available / maxStagesPerDay);
     grid.style.setProperty("--max-row-height", maxRowHeight + "px");
   }
 
@@ -869,7 +874,22 @@
     els.authGate.innerHTML = "";
   }
 
+  async function loadFestivalData() {
+    try {
+      const r = await fetch("/api/festival-data");
+      const data = await r.json();
+      if (data && Array.isArray(data.days) && data.days.length) {
+        FESTIVAL_DATA.days = data.days;
+        if (Array.isArray(data.stages) && data.stages.length) FESTIVAL_DATA.stages = data.stages;
+        recomputeMaxStagesPerDay();
+      }
+    } catch {
+      // fall back to the static public/data.js lineup baked into the page
+    }
+  }
+
   async function boot() {
+    await loadFestivalData();
     try {
       const me = await Api.me();
       if (me.username) {
