@@ -17,6 +17,11 @@ const updateActStmt = db.prepare(
   "UPDATE festival_acts SET day_id = @dayId, artist = @artist, stage = @stage, time = @time, tba = @tba WHERE id = @id"
 );
 const deleteActStmt = db.prepare("DELETE FROM festival_acts WHERE id = ?");
+const countDaysStmt = db.prepare("SELECT COUNT(*) AS n FROM festival_days");
+const insertDayStmt = db.prepare("INSERT INTO festival_days (id, weekday, date_num, sort_order) VALUES (?, ?, ?, ?)");
+const insertRawActStmt = db.prepare(
+  "INSERT INTO festival_acts (day_id, artist, stage, time, tba) VALUES (?, ?, ?, ?, ?)"
+);
 
 function actRowToPublic(row) {
   const act = { artist: row.artist, stage: row.stage };
@@ -69,4 +74,35 @@ function deleteAct(id) {
   deleteActStmt.run(id);
 }
 
-module.exports = { getFestivalData, listDays, listActsForAdmin, createAct, updateAct, deleteAct };
+// One-time seed from public/data.js — no-ops if festival_days already has
+// rows. Used by both scripts/migrate-schedule-to-db.js (local) and the
+// admin endpoint (for hosts we can't shell into, e.g. Railway).
+function seedFromStaticData() {
+  if (countDaysStmt.get().n > 0) {
+    return { seeded: false, days: 0, acts: 0 };
+  }
+
+  let acts = 0;
+  const seed = db.transaction(() => {
+    FESTIVAL_DATA.days.forEach((day, i) => {
+      insertDayStmt.run(day.id, day.weekday, day.dateNum, i);
+      for (const act of day.acts) {
+        insertRawActStmt.run(day.id, act.artist, act.stage, act.time || null, act.tba ? 1 : 0);
+        acts++;
+      }
+    });
+  });
+  seed();
+
+  return { seeded: true, days: FESTIVAL_DATA.days.length, acts };
+}
+
+module.exports = {
+  getFestivalData,
+  listDays,
+  listActsForAdmin,
+  createAct,
+  updateAct,
+  deleteAct,
+  seedFromStaticData
+};

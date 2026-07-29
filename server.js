@@ -242,6 +242,12 @@ app.get("/api/admin/days", requireAdmin, (req, res) => {
   res.json(schedule.listDays());
 });
 
+// One-off remote trigger for scripts/migrate-schedule-to-db.js — seeds
+// festival_days/festival_acts from public/data.js. No-ops if already seeded.
+app.post("/api/admin/migrate-schedule", requireAdmin, (req, res) => {
+  res.json(schedule.seedFromStaticData());
+});
+
 app.get("/api/admin/acts", requireAdmin, (req, res) => {
   res.json(schedule.listActsForAdmin());
 });
