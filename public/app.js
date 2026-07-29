@@ -132,6 +132,12 @@
     return FESTIVAL_DATA.stages.filter((stage) => day.acts.some((a) => a.stage === stage && !a.tba));
   }
 
+  // Row height is capped to whatever the busiest day would get, so a
+  // single-stage day doesn't stretch its row to fill the whole viewport —
+  // it keeps the same row size as every other day and just leaves the
+  // leftover space blank.
+  const MAX_STAGES_PER_DAY = Math.max(...FESTIVAL_DATA.days.map((d) => stagesWithActs(d).length || 1));
+
   function computeLayout(day) {
     const timedActs = day.acts.filter((a) => !a.tba);
     const byStage = {};
@@ -271,6 +277,14 @@
     });
 
     els.timeline.appendChild(grid);
+    capRowHeight(grid, ruler);
+  }
+
+  function capRowHeight(grid, ruler) {
+    const available = grid.clientHeight - ruler.clientHeight;
+    if (available <= 0) return;
+    const maxRowHeight = Math.floor(available / MAX_STAGES_PER_DAY);
+    grid.style.setProperty("--max-row-height", maxRowHeight + "px");
   }
 
   function renderTba(day) {

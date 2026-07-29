@@ -295,6 +295,7 @@ main {
   display: flex;
   flex: 1 1 var(--row-height);
   min-height: var(--row-height);
+  max-height: var(--max-row-height, none);
   border-bottom: 1px solid var(--gridline);
 }
 .stage-row:last-child {
