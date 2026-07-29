@@ -631,9 +631,14 @@
         return;
       }
     } catch {
-      /* fall through to gate */
+      /* fall through to guest */
     }
-    showGate();
+    // No login wall on first load — the calendar itself is the home screen,
+    // browsable as a guest. "Iniciar sesión" in the corner opens the gate
+    // for anyone who wants an account.
+    state.user = "guest";
+    state.favorites = new Set();
+    renderAll();
   }
 
   boot();
