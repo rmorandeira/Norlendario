@@ -5,6 +5,7 @@ const session = require("express-session");
 const bcrypt = require("bcryptjs");
 const db = require("./db");
 const { getArtistInfo, fetchAndStoreArtistInfo } = require("./artistInfo");
+const { STAGE_COORDS, getRoute, fetchAndStoreRoute } = require("./routes");
 const FESTIVAL_DATA = require("./public/data.js");
 
 const app = express();
@@ -128,6 +129,40 @@ app.get("/api/artist-info", async (req, res) => {
   } catch {
     res.status(502).json({ error: "lookup_failed" });
   }
+});
+
+app.get("/api/route-between", (req, res) => {
+  const from = String(req.query.from || "");
+  const to = String(req.query.to || "");
+  if (!STAGE_COORDS[from] || !STAGE_COORDS[to]) {
+    return res.status(400).json({ error: "unknown_stage" });
+  }
+  res.json(getRoute(from, to));
+});
+
+// One-off remote trigger for scripts/sweep-routes.js — precomputes walking
+// time + route geometry between every stage pair. Same guard as the
+// artist sweep below.
+app.post("/api/admin/sweep-routes", async (req, res) => {
+  const expected = process.env.ADMIN_SECRET;
+  if (!expected || req.get("x-admin-secret") !== expected) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+
+  const stages = Object.keys(STAGE_COORDS);
+  const results = [];
+  for (let i = 0; i < stages.length; i++) {
+    for (let j = i + 1; j < stages.length; j++) {
+      try {
+        const { minutes } = await fetchAndStoreRoute(stages[i], stages[j]);
+        results.push({ from: stages[i], to: stages[j], minutes });
+      } catch (err) {
+        results.push({ from: stages[i], to: stages[j], error: err.message });
+      }
+    }
+  }
+
+  res.json({ swept: results.length, results });
 });
 
 // One-off remote trigger for the same sweep scripts/sweep-artists.js does

@@ -567,10 +567,17 @@
 
     let html = `<div class="page-inner"><h2>${t(lang, "routeTitle")}</h2>`;
     let lastDayId = null;
+    let lastAct = null;
+    const connectors = [];
+
     items.forEach(({ day, act }, idx) => {
-      if (day.id !== lastDayId) {
+      const sameDay = day.id === lastDayId;
+      if (!sameDay) {
         html += `<h3 class="route-day-heading">${formatDayDate(lang, day)}</h3>`;
-        lastDayId = day.id;
+      } else if (lastAct && lastAct.stage !== act.stage) {
+        const connectorId = "routeConnector-" + idx;
+        connectors.push({ id: connectorId, from: lastAct.stage, to: act.stage });
+        html += `<div class="route-connector" id="${connectorId}"></div>`;
       }
       html += `
         <button class="route-item" data-idx="${idx}" style="--stage-color:var(${STAGE_COLOR_VARS[act.stage]})">
@@ -578,6 +585,8 @@
           <span class="route-artist">${act.artist}</span>
           <span class="route-stage">${act.stage}</span>
         </button>`;
+      lastDayId = day.id;
+      lastAct = act;
     });
     html += `</div>`;
     els.routeView.innerHTML = html;
@@ -588,6 +597,52 @@
         openDetail(act, day);
       });
     });
+
+    connectors.forEach(({ id, from, to }) => loadRouteConnector(id, from, to));
+  }
+
+  async function loadRouteConnector(containerId, from, to) {
+    let data;
+    try {
+      const r = await fetch("/api/route-between?from=" + encodeURIComponent(from) + "&to=" + encodeURIComponent(to));
+      data = await r.json();
+    } catch {
+      data = { minutes: null, geometry: null, directionsUrl: null };
+    }
+
+    const container = document.getElementById(containerId);
+    if (!container) return; // user navigated away before this resolved
+
+    const lang = state.lang;
+    const walkLabel = typeof data.minutes === "number" ? t(lang, "routeWalkMinutes").replace("{min}", data.minutes) : t(lang, "routeWalkUnknown");
+
+    container.innerHTML = `
+      ${data.geometry ? `<div class="route-map" id="${containerId}-map"></div>` : ""}
+      <a class="route-connector-info" href="${data.directionsUrl}" target="_blank" rel="noopener noreferrer">🚶 ${walkLabel}</a>
+    `;
+
+    if (data.geometry && window.L) {
+      const mapEl = document.getElementById(containerId + "-map");
+      const latlngs = data.geometry.map(([lng, lat]) => [lat, lng]);
+      const map = L.map(mapEl, {
+        zoomControl: false,
+        dragging: false,
+        scrollWheelZoom: false,
+        doubleClickZoom: false,
+        touchZoom: false
+      });
+      L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+        maxZoom: 19,
+        attribution: "© OpenStreetMap contributors"
+      }).addTo(map);
+      const line = L.polyline(latlngs, { color: "#2a78d6", weight: 4 }).addTo(map);
+      L.circleMarker(latlngs[0], { radius: 6, color: "#fff", weight: 2, fillColor: "#1baf7a", fillOpacity: 1 }).addTo(map);
+      L.circleMarker(latlngs[latlngs.length - 1], { radius: 6, color: "#fff", weight: 2, fillColor: "#e34948", fillOpacity: 1 }).addTo(
+        map
+      );
+      map.fitBounds(line.getBounds(), { padding: [16, 16] });
+      mapEl.addEventListener("click", () => window.open(data.directionsUrl, "_blank", "noopener"));
+    }
   }
 
   function renderUserView() {

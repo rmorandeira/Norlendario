@@ -35,6 +35,15 @@ db.exec(`
     spotify_verified INTEGER NOT NULL DEFAULT 0,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+
+  CREATE TABLE IF NOT EXISTS stage_routes (
+    pair_key TEXT PRIMARY KEY,
+    from_stage TEXT NOT NULL,
+    to_stage TEXT NOT NULL,
+    minutes REAL,
+    geometry TEXT,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 // Drop columns from an older schema version, if this DB predates the switch
