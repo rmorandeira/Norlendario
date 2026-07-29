@@ -299,8 +299,9 @@ main {
   left: 0;
   z-index: 2;
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 6px;
   padding: 8px 10px;
   background: var(--surface);
   border-right: 1px solid var(--gridline);
@@ -310,13 +311,14 @@ main {
 .stage-label i {
   width: 9px;
   height: 9px;
+  margin-top: 3px;
   border-radius: 50%;
   flex: 0 0 auto;
 }
 .stage-label span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: break-word;
+  text-align: right;
 }
 
 .stage-track {
