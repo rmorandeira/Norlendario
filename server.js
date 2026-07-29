@@ -4,7 +4,8 @@ const express = require("express");
 const session = require("express-session");
 const bcrypt = require("bcryptjs");
 const db = require("./db");
-const { getArtistInfo } = require("./artistInfo");
+const { getArtistInfo, fetchAndStoreArtistInfo } = require("./artistInfo");
+const FESTIVAL_DATA = require("./public/data.js");
 
 const app = express();
 app.set("trust proxy", 1); // Railway sits behind a TLS-terminating proxy
@@ -121,6 +122,33 @@ app.get("/api/artist-info", async (req, res) => {
   } catch {
     res.status(502).json({ error: "lookup_failed" });
   }
+});
+
+// One-off remote trigger for the same sweep scripts/sweep-artists.js does
+// locally — lets us pre-fill artist_info on a host (e.g. Railway) we can't
+// SSH into directly. Fails closed if ADMIN_SECRET isn't configured.
+app.post("/api/admin/sweep-artists", async (req, res) => {
+  const expected = process.env.ADMIN_SECRET;
+  if (!expected || req.get("x-admin-secret") !== expected) {
+    return res.status(401).json({ error: "unauthorized" });
+  }
+
+  const names = new Set();
+  for (const day of FESTIVAL_DATA.days) {
+    for (const act of day.acts) names.add(act.artist);
+  }
+
+  const results = [];
+  for (const name of names) {
+    try {
+      const info = await fetchAndStoreArtistInfo(name);
+      results.push({ name, spotifyVerified: info.spotifyVerified });
+    } catch (err) {
+      results.push({ name, error: err.message });
+    }
+  }
+
+  res.json({ swept: results.length, results });
 });
 
 app.use(express.static(path.join(__dirname, "public")));
