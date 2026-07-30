@@ -340,8 +340,12 @@
           el.style.setProperty("--dur", block.duration / 60);
           el.style.setProperty("--stage-color", `var(${STAGE_COLOR_VARS[stage]})`);
           const favCount = state.favCounts.get(actId(day, block)) || 0;
+          const attendingText =
+            favCount > 0
+              ? t(state.lang, favCount === 1 ? "attendingCountOne" : "attendingCount").replace("{count}", favCount)
+              : "";
           el.innerHTML = `<span class="act-time">${block.time}</span><span class="act-name">${block.artist}</span>${
-            favCount > 0 ? `<span class="act-fav-count">★ ${favCount}</span>` : ""
+            favCount > 0 ? `<span class="act-fav-count">${attendingText}</span>` : ""
           }`;
           if (!isGuest()) el.appendChild(starButton(day, block));
           el.addEventListener("click", () => openDetail(block, day));

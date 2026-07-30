@@ -42,6 +42,8 @@ const I18N = {
     favHideBtn: "Ocultar favoritos",
     favoriteAdd: "Añadir a favoritos",
     favoriteRemove: "Quitar de favoritos",
+    attendingCount: "{count} asistirán",
+    attendingCountOne: "{count} asistirá",
 
     navCalendar: "Calendario",
     navRoute: "Mi ruta",
@@ -120,6 +122,8 @@ const I18N = {
     favHideBtn: "Hide favorites",
     favoriteAdd: "Add to favorites",
     favoriteRemove: "Remove from favorites",
+    attendingCount: "{count} attending",
+    attendingCountOne: "{count} attending",
 
     navCalendar: "Calendar",
     navRoute: "My route",
