@@ -28,6 +28,10 @@
   const APP_VERSION = "1.2.0";
   const THEME_KEY = "noroeste_theme";
 
+  // Hardcoded rather than location.origin so shared text/images always point
+  // at the real production app, even when tested from localhost.
+  const APP_URL = "https://norlendario.web.up.railway.app";
+
   const state = {
     lang: (navigator.language || "es").toLowerCase().startsWith("en") ? "en" : "es",
     theme: localStorage.getItem(THEME_KEY), // "light" | "dark" | null (follow system)
@@ -601,7 +605,7 @@
     });
     lines.push("");
     lines.push(t(lang, "shareRouteFooter"));
-    lines.push(location.origin);
+    lines.push(APP_URL);
     return lines.join("\n");
   }
 
@@ -676,7 +680,7 @@
       rows.push({ type: "act", day, act, commentLines });
     });
 
-    let height = 250;
+    let height = 280;
     rows.forEach((row) => {
       if (row.type === "day") height += 50;
       else {
@@ -684,7 +688,7 @@
         if (row.commentLines.length) height += row.commentLines.length * 34 + 24 + 12;
       }
     });
-    height += 100;
+    height += 40;
 
     const canvas = document.createElement("canvas");
     canvas.width = width;
@@ -696,18 +700,21 @@
 
     ctx.fillStyle = "#ffffff";
     ctx.font = "800 52px system-ui, sans-serif";
-    ctx.fillText("Festival Noroeste", padding, 100);
+    ctx.fillText("NORLENDARIO", padding, 100);
     ctx.fillStyle = "#c3c2b7";
-    ctx.font = "500 28px system-ui, sans-serif";
-    ctx.fillText(t(lang, "shareRouteHeader"), padding, 148);
+    ctx.font = "600 28px system-ui, sans-serif";
+    ctx.fillText(APP_URL, padding, 140);
+    ctx.fillStyle = "#898781";
+    ctx.font = "500 26px system-ui, sans-serif";
+    ctx.fillText(t(lang, "shareRouteHeader"), padding, 178);
     ctx.strokeStyle = "#2c2c2a";
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(padding, 186);
-    ctx.lineTo(width - padding, 186);
+    ctx.moveTo(padding, 212);
+    ctx.lineTo(width - padding, 212);
     ctx.stroke();
 
-    let y = 246;
+    let y = 264;
     for (const row of rows) {
       if (row.type === "day") {
         ctx.fillStyle = "#898781";
@@ -768,13 +775,6 @@
       }
       y += rowGap;
     }
-
-    ctx.fillStyle = "#898781";
-    ctx.font = "500 22px system-ui, sans-serif";
-    ctx.fillText(t(lang, "shareRouteFooter"), padding, height - 56);
-    ctx.fillStyle = "#c3c2b7";
-    ctx.font = "700 26px system-ui, sans-serif";
-    ctx.fillText(location.origin, padding, height - 22);
 
     return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
   }
