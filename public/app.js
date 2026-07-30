@@ -454,12 +454,13 @@
       return `<p class="extra-status">${t(lang, "noExtraInfo")}</p>`;
     }
 
+    const hasDescription = extra && extra.description;
     const hasGenres = extra && extra.genres && extra.genres.length > 0;
     const hasFollowers = extra && typeof extra.followers === "number";
     const hasImage = extra && extra.image;
     const hasEvents = extra && extra.events && extra.events.length > 0;
 
-    if (!hasGenres && !hasFollowers && !hasImage && !hasEvents) {
+    if (!hasDescription && !hasGenres && !hasFollowers && !hasImage && !hasEvents) {
       return `<p class="extra-status">${t(lang, "noExtraInfo")}</p>`;
     }
 
@@ -467,7 +468,9 @@
     if (hasImage) {
       html += `<img class="artist-photo" src="${extra.image}" alt="${state.detail.act.artist}" loading="lazy" />`;
     }
-    if (hasGenres || hasFollowers) {
+    if (hasDescription) {
+      html += `<p class="artist-description">${extra.description}</p>`;
+    } else if (hasGenres || hasFollowers) {
       const parts = [];
       if (hasGenres) parts.push(formatGenres(extra.genres));
       if (hasFollowers) parts.push(formatFollowers(lang, extra.followers));
@@ -660,7 +663,9 @@
 
     container.innerHTML = `
       ${data.geometry ? `<div class="route-map" id="${containerId}-map"></div>` : ""}
-      <a class="route-connector-info" href="${data.directionsUrl}" target="_blank" rel="noopener noreferrer">🚶 ${walkLabel}</a>
+      <a class="route-connector-info" href="${data.directionsUrl}" target="_blank" rel="noopener noreferrer">
+        <span class="route-walk-icon">🚶</span><span class="route-walk-label">${walkLabel}</span>
+      </a>
     `;
 
     if (data.geometry && window.L) {

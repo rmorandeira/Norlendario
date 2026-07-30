@@ -224,18 +224,21 @@
       </div>
       <div class="admin-table-wrap">
         <table class="admin-table">
-          <thead><tr><th></th><th>Nombre</th><th>Spotify</th><th>Géneros</th><th>Seguidores</th><th>Actualizado</th><th></th></tr></thead>
+          <thead><tr><th></th><th>Nombre</th><th>Spotify</th><th>Descripción</th><th>Actualizado</th><th></th></tr></thead>
           <tbody>`;
     artists.forEach((a) => {
+      const shownImage = a.imageOverride || a.image || "";
       html += `
         <tr data-name="${escapeAttr(a.name)}">
-          <td><div class="admin-thumb" style="background-image:url('${a.image || ""}')"></div></td>
+          <td><div class="admin-thumb" style="background-image:url('${shownImage}')"></div></td>
           <td>${a.name}</td>
           <td>${a.spotifyVerified ? "✓" : "—"}</td>
-          <td>${a.genres.join(", ") || "—"}</td>
-          <td>${typeof a.followers === "number" ? a.followers : "—"}</td>
+          <td class="admin-desc-cell">${a.description ? escapeAttr(a.description).slice(0, 80) : "—"}</td>
           <td>${a.updatedAt ? new Date(a.updatedAt + "Z").toLocaleString() : "—"}</td>
-          <td><button class="admin-btn-regen">Regenerar</button></td>
+          <td class="admin-row-actions">
+            <button class="admin-btn-edit">Editar</button>
+            <button class="admin-btn-regen">Regenerar</button>
+          </td>
         </tr>`;
     });
     html += `</tbody></table></div>`;
@@ -260,6 +263,48 @@
         await adminFetch("/api/admin/artists/" + encodeURIComponent(name) + "/regenerate", { method: "POST" });
         renderArtistsTab();
       });
+    });
+
+    els.main.querySelectorAll(".admin-btn-edit").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const name = btn.closest("tr").dataset.name;
+        const artist = artists.find((a) => a.name === name);
+        openArtistForm(artist);
+      });
+    });
+  }
+
+  function openArtistForm(artist) {
+    const overlay = document.createElement("div");
+    overlay.className = "admin-modal-overlay";
+    overlay.innerHTML = `
+      <div class="admin-modal">
+        <h2>${escapeAttr(artist.name)}</h2>
+        <label>URL de imagen (deja vacío para usar la de Spotify)
+          <input type="text" id="formImage" value="${escapeAttr(artist.imageOverride || "")}" placeholder="https://…" />
+        </label>
+        <label>Descripción
+          <textarea id="formDescription" rows="5">${artist.description ? escapeAttr(artist.description) : ""}</textarea>
+        </label>
+        <div class="admin-modal-actions">
+          <button id="formSave" class="admin-btn-primary">Guardar</button>
+          <button id="formCancel" class="admin-btn">Cancelar</button>
+        </div>
+      </div>`;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector("#formCancel").addEventListener("click", () => overlay.remove());
+    overlay.querySelector("#formSave").addEventListener("click", async () => {
+      const payload = {
+        image: overlay.querySelector("#formImage").value.trim(),
+        description: overlay.querySelector("#formDescription").value.trim()
+      };
+      await adminFetch("/api/admin/artists/" + encodeURIComponent(artist.name), {
+        method: "PUT",
+        body: JSON.stringify(payload)
+      });
+      overlay.remove();
+      renderArtistsTab();
     });
   }
 

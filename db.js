@@ -33,6 +33,8 @@ db.exec(`
     followers INTEGER,
     spotify_url TEXT,
     spotify_verified INTEGER NOT NULL DEFAULT 0,
+    image_override TEXT,
+    description TEXT,
     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
 
@@ -67,5 +69,7 @@ db.exec(`
 const existingColumns = db.prepare("PRAGMA table_info(artist_info)").all().map((c) => c.name);
 if (existingColumns.includes("bio")) db.exec("ALTER TABLE artist_info DROP COLUMN bio");
 if (existingColumns.includes("wikipedia_url")) db.exec("ALTER TABLE artist_info DROP COLUMN wikipedia_url");
+if (!existingColumns.includes("image_override")) db.exec("ALTER TABLE artist_info ADD COLUMN image_override TEXT");
+if (!existingColumns.includes("description")) db.exec("ALTER TABLE artist_info ADD COLUMN description TEXT");
 
 module.exports = db;

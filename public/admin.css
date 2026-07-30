@@ -211,7 +211,8 @@
   color: var(--ink-2);
 }
 .admin-modal input,
-.admin-modal select {
+.admin-modal select,
+.admin-modal textarea {
   font: inherit;
   font-size: 0.95rem;
   padding: 8px 10px;
@@ -219,6 +220,13 @@
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--ink);
+  resize: vertical;
+}
+.admin-desc-cell {
+  max-width: 240px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .admin-checkbox-label {
   flex-direction: row !important;

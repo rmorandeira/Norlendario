@@ -14,14 +14,32 @@ const upsert = db.prepare(`
     updated_at = excluded.updated_at
 `);
 
+const setOverride = db.prepare(`
+  INSERT INTO artist_info (name, image_override, description, updated_at)
+  VALUES (@name, @imageOverride, @description, datetime('now'))
+  ON CONFLICT(name) DO UPDATE SET
+    image_override = @imageOverride,
+    description = @description,
+    updated_at = datetime('now')
+`);
+
 function rowToInfo(row) {
   return {
-    image: row.image || null,
+    image: row.image_override || row.image || null,
     genres: row.genres ? JSON.parse(row.genres) : [],
     followers: row.followers,
-    spotifyUrl: row.spotify_url,
-    spotifyVerified: Boolean(row.spotify_verified)
+    spotifyUrl: row.spotify_url || "https://open.spotify.com/search/" + encodeURIComponent(row.name),
+    spotifyVerified: Boolean(row.spotify_verified),
+    description: row.description || null
   };
+}
+
+// Manual admin edits — kept in separate columns so a later Spotify sweep
+// (which only touches image/genres/followers/spotify_*) never clobbers
+// them. Creates the artist_info row if it doesn't exist yet.
+function setManualOverride(name, { image, description }) {
+  setOverride.run({ name, imageOverride: image || null, description: description || null });
+  return rowToInfo(getCached.get(name));
 }
 
 async function fetchBandsintownEvents(name) {
@@ -74,7 +92,8 @@ function fallbackInfo(name) {
     genres: [],
     followers: null,
     spotifyUrl: "https://open.spotify.com/search/" + encodeURIComponent(name),
-    spotifyVerified: false
+    spotifyVerified: false,
+    description: null
   };
 }
 
@@ -90,4 +109,4 @@ async function getArtistInfo(name) {
   return { ...info, events };
 }
 
-module.exports = { getArtistInfo, fetchAndStoreArtistInfo };
+module.exports = { getArtistInfo, fetchAndStoreArtistInfo, setManualOverride };

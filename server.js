@@ -4,7 +4,7 @@ const express = require("express");
 const session = require("express-session");
 const bcrypt = require("bcryptjs");
 const db = require("./db");
-const { getArtistInfo, fetchAndStoreArtistInfo } = require("./artistInfo");
+const { getArtistInfo, fetchAndStoreArtistInfo, setManualOverride } = require("./artistInfo");
 const { STAGE_COORDS, getRoute, fetchAndStoreRoute } = require("./routes");
 const schedule = require("./schedule");
 const FESTIVAL_DATA = require("./public/data.js");
@@ -235,6 +235,8 @@ app.get("/api/admin/artists", requireAdmin, (req, res) => {
     rows.map((r) => ({
       name: r.name,
       image: r.image,
+      imageOverride: r.image_override,
+      description: r.description,
       genres: r.genres ? JSON.parse(r.genres) : [],
       followers: r.followers,
       spotifyUrl: r.spotify_url,
@@ -242,6 +244,13 @@ app.get("/api/admin/artists", requireAdmin, (req, res) => {
       updatedAt: r.updated_at
     }))
   );
+});
+
+// Manual admin edit — stored in image_override/description, separate from
+// the Spotify-sourced columns, so a later sweep never overwrites it.
+app.put("/api/admin/artists/:name", requireAdmin, (req, res) => {
+  const { image, description } = req.body;
+  res.json(setManualOverride(req.params.name, { image, description }));
 });
 
 app.post("/api/admin/artists/:name/regenerate", requireAdmin, async (req, res) => {
