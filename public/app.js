@@ -617,9 +617,38 @@
     return lines.join("\n");
   }
 
-  function shareRoute(items) {
+  function triggerBlobDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  }
+
+  // Shares the route as an actual image (not just text) wherever possible —
+  // WhatsApp (and any other app in the native share sheet) receives the
+  // photo plus a text caption. Only falls back to a text-only wa.me link on
+  // browsers without Web Share file support (mainly desktop).
+  async function shareRoute(items) {
+    const blob = await buildRouteStoryBlob(items);
+    if (!blob) return;
+    const file = new File([blob], "mi-ruta-noroeste-2026.png", { type: "image/png" });
     const text = buildRouteShareText(items);
-    shareViaWebShareOrWhatsapp({ title: t(state.lang, "routeTitle"), text }, text);
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], text, title: t(state.lang, "routeTitle") });
+      } catch {
+        /* user cancelled the native share sheet */
+      }
+      return;
+    }
+
+    window.open("https://wa.me/?text=" + encodeURIComponent(text), "_blank", "noopener");
+    triggerBlobDownload(blob, "mi-ruta-noroeste-2026.png");
   }
 
   function wrapCanvasText(ctx, text, maxWidth) {
@@ -660,43 +689,19 @@
     ctx.closePath();
   }
 
-  // Renders "Mi ruta" as a downloadable poster: lineup + personal comments,
-  // meant to be shared as an image or uploaded as a Spotify playlist cover.
-  async function buildRouteImageBlob(items) {
+  // Renders "Mi ruta" as a 1080x1920 Instagram Story image: full lineup +
+  // comments (condensed, truncated with a "+N" line if it overflows), plus
+  // one randomly featured artist up top. We can't embed real audio here —
+  // Instagram doesn't expose a public API for that to outside websites, and
+  // Spotify's API gives us metadata/images only, not licensed track audio —
+  // so the featured artist is a visual cue for the person to add the real
+  // song themselves via Instagram's own music sticker after sharing.
+  async function buildRouteStoryBlob(items) {
     const lang = state.lang;
     const width = 1080;
+    const height = 1920;
     const padding = 56;
-    const avatarSize = 84;
-    const rowGap = 26;
-    const rowHeight = avatarSize + 20;
-
-    const measureCanvas = document.createElement("canvas");
-    const mctx = measureCanvas.getContext("2d");
-    mctx.font = "500 26px system-ui, sans-serif";
-    const textX = padding + avatarSize + 28;
-    const commentMaxWidth = width - padding - textX - 40;
-
-    const rows = [];
-    let lastDayId = null;
-    items.forEach(({ day, act }) => {
-      if (day.id !== lastDayId) {
-        rows.push({ type: "day", label: formatDayDate(lang, day).toUpperCase() });
-        lastDayId = day.id;
-      }
-      const comment = state.comments.get(actId(day, act));
-      const commentLines = comment ? wrapCanvasText(mctx, comment, commentMaxWidth) : [];
-      rows.push({ type: "act", day, act, commentLines });
-    });
-
-    let height = 280;
-    rows.forEach((row) => {
-      if (row.type === "day") height += 50;
-      else {
-        height += rowHeight + rowGap;
-        if (row.commentLines.length) height += row.commentLines.length * 34 + 24 + 12;
-      }
-    });
-    height += 40;
+    const bottomSafe = 180; // leaves room for Instagram's own story UI
 
     const canvas = document.createElement("canvas");
     canvas.width = width;
@@ -722,13 +727,109 @@
     ctx.lineTo(width - padding, 212);
     ctx.stroke();
 
-    let y = 264;
-    for (const row of rows) {
+    // --- Featured artist, picked at random each time this is shared ---
+    const featured = items[Math.floor(Math.random() * items.length)].act;
+    const heroSize = 300;
+    const heroX = (width - heroSize) / 2;
+    const heroY = 274;
+    const heroCx = width / 2;
+    const heroCy = heroY + heroSize / 2;
+
+    ctx.fillStyle = "#898781";
+    ctx.font = "700 26px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText(t(lang, "storyFeaturedLabel").toUpperCase(), heroCx, 250);
+
+    const featuredInfo = artistInfoCache.get(featured.artist);
+    const heroImg = await loadCanvasImage(featuredInfo && featuredInfo.image);
+    ctx.save();
+    drawRoundedRect(ctx, heroX, heroY, heroSize, heroSize, 28);
+    ctx.clip();
+    if (heroImg) {
+      ctx.drawImage(heroImg, heroX, heroY, heroSize, heroSize);
+    } else {
+      ctx.fillStyle = STAGE_COLOR_HEX[featured.stage] || "#444";
+      ctx.fillRect(heroX, heroY, heroSize, heroSize);
+      ctx.fillStyle = "#fff";
+      ctx.font = "700 120px system-ui, sans-serif";
+      ctx.textBaseline = "middle";
+      ctx.fillText(featured.artist[0].toUpperCase(), heroCx, heroCy + 6);
+      ctx.textBaseline = "alphabetic";
+    }
+    ctx.restore();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "800 46px system-ui, sans-serif";
+    ctx.fillText(featured.artist, heroCx, heroY + heroSize + 56);
+    ctx.fillStyle = "#c3c2b7";
+    ctx.font = "500 28px system-ui, sans-serif";
+    ctx.fillText(`${formatTimeForDisplay(lang, featured)} · ${featured.stage}`, heroCx, heroY + heroSize + 96);
+    ctx.fillStyle = "#898781";
+    ctx.font = "500 24px system-ui, sans-serif";
+    ctx.fillText(t(lang, "storyMusicHint"), heroCx, heroY + heroSize + 138);
+    ctx.textAlign = "left";
+
+    ctx.strokeStyle = "#2c2c2a";
+    ctx.beginPath();
+    ctx.moveTo(padding, heroY + heroSize + 172);
+    ctx.lineTo(width - padding, heroY + heroSize + 172);
+    ctx.stroke();
+
+    // --- Condensed full lineup below, truncated if it would overflow ---
+    const avatarSize = 64;
+    const rowGap = 18;
+    const rowHeight = avatarSize + 16;
+    const dayHeadingHeight = 42;
+    const textX = padding + avatarSize + 24;
+    const commentMaxWidth = width - padding - textX - 32;
+
+    const measureCanvas = document.createElement("canvas");
+    const mctx = measureCanvas.getContext("2d");
+    mctx.font = "500 22px system-ui, sans-serif";
+
+    const rows = [];
+    let lastDayId = null;
+    items.forEach(({ day, act }) => {
+      if (day.id !== lastDayId) {
+        rows.push({ type: "day", label: formatDayDate(lang, day).toUpperCase() });
+        lastDayId = day.id;
+      }
+      const comment = state.comments.get(actId(day, act));
+      const commentLines = comment ? wrapCanvasText(mctx, comment, commentMaxWidth) : [];
+      rows.push({ type: "act", act, commentLines });
+    });
+
+    function rowPx(row) {
+      if (row.type === "day") return dayHeadingHeight;
+      let h = rowHeight + rowGap;
+      if (row.commentLines.length) h += row.commentLines.length * 28 + 20 + 10;
+      return h;
+    }
+
+    const listTop = heroY + heroSize + 200;
+    const availableHeight = height - bottomSafe - listTop;
+    const moreLineHeight = 44;
+    let visibleRows = rows;
+    let hiddenActCount = 0;
+    let used = rows.reduce((sum, r) => sum + rowPx(r), 0);
+    while (used > availableHeight && visibleRows.length) {
+      const dropped = visibleRows[visibleRows.length - 1];
+      visibleRows = visibleRows.slice(0, -1);
+      used -= rowPx(dropped);
+      if (dropped.type === "act") hiddenActCount++;
+      if (used + (hiddenActCount ? moreLineHeight : 0) <= availableHeight) break;
+    }
+    while (visibleRows.length && visibleRows[visibleRows.length - 1].type === "day") {
+      visibleRows = visibleRows.slice(0, -1);
+    }
+
+    let y = listTop;
+    for (const row of visibleRows) {
       if (row.type === "day") {
         ctx.fillStyle = "#898781";
-        ctx.font = "700 28px system-ui, sans-serif";
+        ctx.font = "700 24px system-ui, sans-serif";
         ctx.fillText(row.label, padding, y);
-        y += 50;
+        y += dayHeadingHeight;
         continue;
       }
       const { act, commentLines } = row;
@@ -738,7 +839,7 @@
       const cy = y + avatarSize / 2;
 
       ctx.fillStyle = STAGE_COLOR_HEX[act.stage] || "#666";
-      ctx.fillRect(padding - 20, y, 6, avatarSize);
+      ctx.fillRect(padding - 18, y, 5, avatarSize);
 
       ctx.save();
       ctx.beginPath();
@@ -751,53 +852,65 @@
         ctx.fillStyle = STAGE_COLOR_HEX[act.stage] || "#444";
         ctx.fillRect(padding, y, avatarSize, avatarSize);
         ctx.fillStyle = "#fff";
-        ctx.font = "700 34px system-ui, sans-serif";
+        ctx.font = "700 26px system-ui, sans-serif";
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillText(act.artist[0].toUpperCase(), cx, cy + 2);
+        ctx.fillText(act.artist[0].toUpperCase(), cx, cy + 1);
         ctx.textAlign = "left";
         ctx.textBaseline = "alphabetic";
       }
       ctx.restore();
 
       ctx.fillStyle = "#ffffff";
-      ctx.font = "700 36px system-ui, sans-serif";
-      ctx.fillText(act.artist, textX, y + 38);
+      ctx.font = "700 28px system-ui, sans-serif";
+      ctx.fillText(act.artist, textX, y + 30);
       ctx.fillStyle = "#c3c2b7";
-      ctx.font = "500 26px system-ui, sans-serif";
-      ctx.fillText(`${formatTimeForDisplay(lang, act)} · ${act.stage}`, textX, y + 72);
+      ctx.font = "500 22px system-ui, sans-serif";
+      ctx.fillText(`${formatTimeForDisplay(lang, act)} · ${act.stage}`, textX, y + 58);
 
       y += rowHeight;
 
       if (commentLines.length) {
-        const bubbleHeight = commentLines.length * 34 + 24;
+        const bubbleHeight = commentLines.length * 28 + 20;
         ctx.fillStyle = "#1a1a19";
-        drawRoundedRect(ctx, textX, y, commentMaxWidth, bubbleHeight, 14);
+        drawRoundedRect(ctx, textX, y, commentMaxWidth, bubbleHeight, 12);
         ctx.fill();
         ctx.fillStyle = "#ffffff";
-        ctx.font = "italic 500 26px system-ui, sans-serif";
+        ctx.font = "italic 500 22px system-ui, sans-serif";
         commentLines.forEach((line, i) => {
-          ctx.fillText(line, textX + 18, y + 30 + i * 34);
+          ctx.fillText(line, textX + 16, y + 26 + i * 28);
         });
-        y += bubbleHeight + 12;
+        y += bubbleHeight + 10;
       }
       y += rowGap;
+    }
+
+    if (hiddenActCount > 0) {
+      ctx.fillStyle = "#898781";
+      ctx.font = "600 24px system-ui, sans-serif";
+      ctx.fillText(t(lang, "shareMoreCount").replace("{count}", hiddenActCount), padding, y + 8);
     }
 
     return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
   }
 
-  async function downloadRouteImage(items) {
-    const blob = await buildRouteImageBlob(items);
+  async function shareRouteImageToInstagram(items) {
+    const blob = await buildRouteStoryBlob(items);
     if (!blob) return;
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = "mi-ruta-noroeste-2026.png";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    const file = new File([blob], "mi-ruta-noroeste-2026.png", { type: "image/png" });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file] });
+      } catch {
+        /* user cancelled the native share sheet — nothing to do */
+      }
+      return;
+    }
+
+    // No file-sharing support (most desktop browsers): fall back to a plain
+    // download so the image can still be uploaded to a story manually.
+    triggerBlobDownload(blob, "mi-ruta-noroeste-2026.png");
   }
 
   // --- Bottom nav & Mi ruta / Usuario pages ---
@@ -870,8 +983,8 @@
       <div class="route-header">
         <h2>${t(lang, "routeTitle")}</h2>
         <div class="route-share-actions">
-          <button class="icon-btn" id="routeShareBtn">🔗 ${t(lang, "shareBtn")}</button>
-          <button class="icon-btn" id="routeDownloadBtn">⬇️ ${t(lang, "downloadImageBtn")}</button>
+          <button class="icon-btn" id="routeShareBtn">📤 ${t(lang, "shareBtn")}</button>
+          <button class="icon-btn" id="routeInstagramBtn">📸 ${t(lang, "shareInstagramBtn")}</button>
         </div>
       </div>`;
     let lastDayId = null;
@@ -919,14 +1032,25 @@
 
     items.forEach((_, idx) => wireCommentBlock(idx));
 
-    document.getElementById("routeShareBtn").addEventListener("click", () => shareRoute(items));
-    document.getElementById("routeDownloadBtn").addEventListener("click", async (e) => {
+    document.getElementById("routeShareBtn").addEventListener("click", async (e) => {
       const btn = e.currentTarget;
       const original = btn.innerHTML;
       btn.disabled = true;
       btn.textContent = t(lang, "generatingImage");
       try {
-        await downloadRouteImage(items);
+        await shareRoute(items);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = original;
+      }
+    });
+    document.getElementById("routeInstagramBtn").addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      const original = btn.innerHTML;
+      btn.disabled = true;
+      btn.textContent = t(lang, "generatingImage");
+      try {
+        await shareRouteImageToInstagram(items);
       } finally {
         btn.disabled = false;
         btn.innerHTML = original;
