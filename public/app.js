@@ -25,7 +25,7 @@
   const MAX_DURATION = 90; // minutes, cap when the next act starts later than this
   const MIN_DURATION = 30; // minutes, floor so a block always stays readable
 
-  const APP_VERSION = "1.3.0";
+  const APP_VERSION = "1.3.1";
   const THEME_KEY = "noroeste_theme";
 
   // Hardcoded rather than location.origin so shared text/images always point
