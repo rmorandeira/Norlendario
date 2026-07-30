@@ -67,6 +67,14 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+// The route/artist sweeps take longer than most proxies keep a request
+// open (Railway's included), so they run in the background — the endpoint
+// returns immediately and progress is polled via /api/admin/sweep-status.
+const sweepStatus = {
+  routes: { running: false, result: null },
+  artists: { running: false, result: null }
+};
+
 app.post("/api/auth/signup", (req, res) => {
   const username = String(req.body.username || "").trim();
   const password = String(req.body.password || "");
@@ -162,40 +170,63 @@ app.get("/api/festival-data", (req, res) => {
 });
 
 // One-off remote trigger for scripts/sweep-routes.js — precomputes walking
-// time + route geometry between every stage pair.
-app.post("/api/admin/sweep-routes", requireAdmin, async (req, res) => {
-  const stages = Object.keys(STAGE_COORDS);
-  const results = [];
-  for (let i = 0; i < stages.length; i++) {
-    for (let j = i + 1; j < stages.length; j++) {
-      try {
-        const { minutes } = await fetchAndStoreRoute(stages[i], stages[j]);
-        results.push({ from: stages[i], to: stages[j], minutes });
-      } catch (err) {
-        results.push({ from: stages[i], to: stages[j], error: err.message });
+// time + route geometry between every stage pair. Responds immediately;
+// check progress via GET /api/admin/sweep-status.
+app.post("/api/admin/sweep-routes", requireAdmin, (req, res) => {
+  if (sweepStatus.routes.running) {
+    return res.status(409).json({ error: "already_running" });
+  }
+  sweepStatus.routes.running = true;
+  sweepStatus.routes.result = null;
+  res.json({ started: true });
+
+  (async () => {
+    const stages = Object.keys(STAGE_COORDS);
+    const results = [];
+    for (let i = 0; i < stages.length; i++) {
+      for (let j = i + 1; j < stages.length; j++) {
+        try {
+          const { minutes } = await fetchAndStoreRoute(stages[i], stages[j]);
+          results.push({ from: stages[i], to: stages[j], minutes });
+        } catch (err) {
+          results.push({ from: stages[i], to: stages[j], error: err.message });
+        }
       }
     }
-  }
-  res.json({ swept: results.length, results });
+    sweepStatus.routes.running = false;
+    sweepStatus.routes.result = { swept: results.length, results, finishedAt: new Date().toISOString() };
+  })();
 });
 
 // One-off remote trigger for the same sweep scripts/sweep-artists.js does
 // locally — lets us pre-fill artist_info on a host (e.g. Railway) we can't
-// SSH into directly.
-app.post("/api/admin/sweep-artists", requireAdmin, async (req, res) => {
-  const names = new Set(schedule.listActsForAdmin().map((a) => a.artist));
-
-  const results = [];
-  for (const name of names) {
-    try {
-      const info = await fetchAndStoreArtistInfo(name);
-      results.push({ name, spotifyVerified: info.spotifyVerified });
-    } catch (err) {
-      results.push({ name, error: err.message });
-    }
+// SSH into directly. Same fire-and-forget pattern as sweep-routes above.
+app.post("/api/admin/sweep-artists", requireAdmin, (req, res) => {
+  if (sweepStatus.artists.running) {
+    return res.status(409).json({ error: "already_running" });
   }
+  sweepStatus.artists.running = true;
+  sweepStatus.artists.result = null;
+  res.json({ started: true });
 
-  res.json({ swept: results.length, results });
+  (async () => {
+    const names = new Set(schedule.listActsForAdmin().map((a) => a.artist));
+    const results = [];
+    for (const name of names) {
+      try {
+        const info = await fetchAndStoreArtistInfo(name);
+        results.push({ name, spotifyVerified: info.spotifyVerified });
+      } catch (err) {
+        results.push({ name, error: err.message });
+      }
+    }
+    sweepStatus.artists.running = false;
+    sweepStatus.artists.result = { swept: results.length, results, finishedAt: new Date().toISOString() };
+  })();
+});
+
+app.get("/api/admin/sweep-status", requireAdmin, (req, res) => {
+  res.json(sweepStatus);
 });
 
 app.get("/api/admin/artists", requireAdmin, (req, res) => {

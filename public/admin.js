@@ -23,6 +23,25 @@
     return r.json();
   }
 
+  function delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  // Sweeps run in the background on the server — poll sweep-status until
+  // this one stops running, updating statusEl with a live count.
+  async function pollSweepStatus(key, statusEl) {
+    for (;;) {
+      await delay(2000);
+      const status = await adminFetch("/api/admin/sweep-status");
+      const entry = status[key];
+      if (!entry.running) {
+        const result = entry.result;
+        statusEl.textContent = result ? `Hecho: ${result.swept} procesados.` : "Hecho.";
+        return;
+      }
+    }
+  }
+
   async function tryEnter() {
     secret = els.secretInput.value.trim();
     try {
@@ -73,6 +92,8 @@
     let html = `
       <div class="admin-toolbar">
         <button id="addActBtn" class="admin-btn-primary">+ Añadir acto</button>
+        <button id="regenRoutesBtn" class="admin-btn">Regenerar rutas a pie</button>
+        <span id="regenRoutesStatus" class="admin-status"></span>
       </div>
       <div class="admin-table-wrap">
         <table class="admin-table">
@@ -95,6 +116,16 @@
     els.main.innerHTML = html;
 
     document.getElementById("addActBtn").addEventListener("click", () => openActForm(null, days, stages));
+    document.getElementById("regenRoutesBtn").addEventListener("click", async () => {
+      const status = document.getElementById("regenRoutesStatus");
+      try {
+        await adminFetch("/api/admin/sweep-routes", { method: "POST" });
+      } catch (err) {
+        if (err.message !== "request_failed_409") throw err;
+      }
+      status.textContent = "Calculando rutas a pie, puede tardar 30-60s…";
+      await pollSweepStatus("routes", status);
+    });
     els.main.querySelectorAll(".admin-btn-edit").forEach((btn) => {
       btn.addEventListener("click", () => {
         const act = acts.find((a) => String(a.id) === btn.dataset.id);
@@ -202,9 +233,13 @@
 
     document.getElementById("regenAllBtn").addEventListener("click", async () => {
       const status = document.getElementById("regenAllStatus");
+      try {
+        await adminFetch("/api/admin/sweep-artists", { method: "POST" });
+      } catch (err) {
+        if (err.message !== "request_failed_409") throw err; // 409 = already running, just poll it
+      }
       status.textContent = "Regenerando todos, puede tardar un minuto…";
-      await adminFetch("/api/admin/sweep-artists", { method: "POST" });
-      status.textContent = "Hecho.";
+      await pollSweepStatus("artists", status);
       renderArtistsTab();
     });
 
