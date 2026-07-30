@@ -44,6 +44,11 @@ const Api = {
   async removeFavorite(actId) {
     await fetch("/api/favorites/" + encodeURIComponent(actId), { method: "DELETE" });
   },
+  async getFavoriteCounts() {
+    const r = await fetch("/api/favorites/counts");
+    if (!r.ok) return {};
+    return r.json();
+  },
   async getComments() {
     const r = await fetch("/api/comments");
     if (!r.ok) return {};

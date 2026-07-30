@@ -40,6 +40,7 @@
     detail: null, // { act, day }
     user: null, // null (signed out) | "guest" | username
     favorites: new Set(),
+    favCounts: new Map(), // actId -> public aggregate favorite count, visible to guests too
     comments: new Map(), // actId -> personal note, account-only like favorites
     favoritesOnly: false,
     authMode: "login", // "login" | "signup"
@@ -116,12 +117,16 @@
     if (willFavorite) state.favorites.add(id);
     else state.favorites.delete(id);
 
+    const prevCount = state.favCounts.get(id) || 0;
+    state.favCounts.set(id, Math.max(0, prevCount + (willFavorite ? 1 : -1)));
+
     try {
       if (willFavorite) await Api.addFavorite(id);
       else await Api.removeFavorite(id);
     } catch {
       if (willFavorite) state.favorites.delete(id);
       else state.favorites.add(id);
+      state.favCounts.set(id, prevCount);
     }
 
     const day2 = FESTIVAL_DATA.days[state.dayIndex];
@@ -334,7 +339,10 @@
           el.style.setProperty("--start", block.startMin / 60 - layout.rangeStartHour);
           el.style.setProperty("--dur", block.duration / 60);
           el.style.setProperty("--stage-color", `var(${STAGE_COLOR_VARS[stage]})`);
-          el.innerHTML = `<span class="act-time">${block.time}</span><span class="act-name">${block.artist}</span>`;
+          const favCount = state.favCounts.get(actId(day, block)) || 0;
+          el.innerHTML = `<span class="act-time">${block.time}</span><span class="act-name">${block.artist}</span>${
+            favCount > 0 ? `<span class="act-fav-count">★ ${favCount}</span>` : ""
+          }`;
           if (!isGuest()) el.appendChild(starButton(day, block));
           el.addEventListener("click", () => openDetail(block, day));
           el.addEventListener("keydown", (e) => {
@@ -1265,8 +1273,17 @@
     }
   }
 
+  async function loadFavCounts() {
+    try {
+      state.favCounts = new Map(Object.entries(await Api.getFavoriteCounts()));
+    } catch {
+      state.favCounts = new Map();
+    }
+  }
+
   async function boot() {
     await loadFestivalData();
+    await loadFavCounts();
     try {
       const me = await Api.me();
       if (me.username) {

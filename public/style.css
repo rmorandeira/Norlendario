@@ -354,6 +354,11 @@ main {
   overflow-wrap: break-word;
   padding-right: 18px;
 }
+.act-fav-count {
+  font-size: 0.7rem;
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
 
 .act-block.dimmed,
 .tba-chip.dimmed {

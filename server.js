@@ -36,6 +36,9 @@ const findUserByUsername = db.prepare(
 const listFavorites = db.prepare(
   "SELECT act_id FROM favorites WHERE user_id = ?"
 );
+const favoriteCounts = db.prepare(
+  "SELECT act_id, COUNT(*) AS count FROM favorites GROUP BY act_id"
+);
 const addFavorite = db.prepare(
   "INSERT OR IGNORE INTO favorites (user_id, act_id) VALUES (?, ?)"
 );
@@ -151,6 +154,17 @@ app.post("/api/favorites", requireAuth, (req, res) => {
 app.delete("/api/favorites/:actId", requireAuth, (req, res) => {
   removeFavorite.run(req.session.userId, req.params.actId);
   res.status(204).end();
+});
+
+// Public aggregate counts (no user identities) so guests can see how popular
+// a show is on the calendar even without an account.
+app.get("/api/favorites/counts", (req, res) => {
+  const rows = favoriteCounts.all();
+  const map = {};
+  rows.forEach((r) => {
+    map[r.act_id] = r.count;
+  });
+  res.json(map);
 });
 
 app.get("/api/comments", requireAuth, (req, res) => {
