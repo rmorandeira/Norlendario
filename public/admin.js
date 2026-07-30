@@ -92,6 +92,7 @@
     let html = `
       <div class="admin-toolbar">
         <button id="addActBtn" class="admin-btn-primary">+ Añadir acto</button>
+        <button id="migrateScheduleBtn" class="admin-btn">Migrar cartel a BD</button>
         <button id="regenRoutesBtn" class="admin-btn">Regenerar rutas a pie</button>
         <span id="regenRoutesStatus" class="admin-status"></span>
       </div>
@@ -116,6 +117,15 @@
     els.main.innerHTML = html;
 
     document.getElementById("addActBtn").addEventListener("click", () => openActForm(null, days, stages));
+    document.getElementById("migrateScheduleBtn").addEventListener("click", async () => {
+      const status = document.getElementById("regenRoutesStatus");
+      status.textContent = "Migrando…";
+      const result = await adminFetch("/api/admin/migrate-schedule", { method: "POST" });
+      status.textContent = result.seeded
+        ? `Migrado: ${result.days} días, ${result.acts} actos.`
+        : "Ya estaba migrado (sin cambios).";
+      renderActsTab();
+    });
     document.getElementById("regenRoutesBtn").addEventListener("click", async () => {
       const status = document.getElementById("regenRoutesStatus");
       try {
