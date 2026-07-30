@@ -344,9 +344,9 @@
             favCount > 0
               ? t(state.lang, favCount === 1 ? "attendingCountOne" : "attendingCount").replace("{count}", favCount)
               : "";
-          el.innerHTML = `<span class="act-time">${block.time}</span><span class="act-name">${block.artist}</span>${
-            favCount > 0 ? `<span class="act-fav-count">${attendingText}</span>` : ""
-          }`;
+          el.innerHTML = `<span class="act-time">${block.time}${
+            favCount > 0 ? ` <span class="act-fav-count">· ${attendingText}</span>` : ""
+          }</span><span class="act-name">${block.artist}</span>`;
           if (!isGuest()) el.appendChild(starButton(day, block));
           el.addEventListener("click", () => openDetail(block, day));
           el.addEventListener("keydown", (e) => {
