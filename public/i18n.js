@@ -60,7 +60,19 @@ const I18N = {
     deleteAccountBtn: "Eliminar cuenta",
     deleteAccountConfirm: "¿Seguro que quieres eliminar tu cuenta? Se borrarán tu usuario y tus favoritos permanentemente.",
     deleteAccountConfirmBtn: "Sí, eliminar cuenta",
-    cancelBtn: "Cancelar"
+    cancelBtn: "Cancelar",
+
+    shareBtn: "Compartir",
+    downloadImageBtn: "Descargar imagen",
+    generatingImage: "Generando…",
+    shareArtistText: "Mira quién toca en el Festival Noroeste: {artist}",
+    shareRouteHeader: "Mi ruta por el Festival Noroeste 2026:",
+    shareRouteFooter: "Planifica tu propia ruta en:",
+    addCommentBtn: "Añadir comentario",
+    editCommentBtn: "Editar comentario",
+    commentPlaceholder: "Escribe una nota sobre este concierto…",
+    saveBtn: "Guardar",
+    deleteBtn: "Eliminar"
   },
   en: {
     month: "August",
@@ -123,7 +135,19 @@ const I18N = {
     deleteAccountBtn: "Delete account",
     deleteAccountConfirm: "Are you sure you want to delete your account? Your user and favorites will be permanently removed.",
     deleteAccountConfirmBtn: "Yes, delete my account",
-    cancelBtn: "Cancel"
+    cancelBtn: "Cancel",
+
+    shareBtn: "Share",
+    downloadImageBtn: "Download image",
+    generatingImage: "Generating…",
+    shareArtistText: "Check out {artist} at Festival Noroeste",
+    shareRouteHeader: "My route through Festival Noroeste 2026:",
+    shareRouteFooter: "Plan your own route at:",
+    addCommentBtn: "Add comment",
+    editCommentBtn: "Edit comment",
+    commentPlaceholder: "Write a note about this show…",
+    saveBtn: "Save",
+    deleteBtn: "Delete"
   }
 };
 

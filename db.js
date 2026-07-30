@@ -62,6 +62,14 @@ db.exec(`
     time TEXT,
     tba INTEGER NOT NULL DEFAULT 0
   );
+
+  CREATE TABLE IF NOT EXISTS act_comments (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    act_id TEXT NOT NULL,
+    comment TEXT NOT NULL,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, act_id)
+  );
 `);
 
 // Drop columns from an older schema version, if this DB predates the switch

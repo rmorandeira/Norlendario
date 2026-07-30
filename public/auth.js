@@ -43,5 +43,17 @@ const Api = {
   },
   async removeFavorite(actId) {
     await fetch("/api/favorites/" + encodeURIComponent(actId), { method: "DELETE" });
+  },
+  async getComments() {
+    const r = await fetch("/api/comments");
+    if (!r.ok) return {};
+    return r.json();
+  },
+  async setComment(actId, comment) {
+    await fetch("/api/comments/" + encodeURIComponent(actId), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ comment })
+    });
   }
 };

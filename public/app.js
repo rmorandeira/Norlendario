@@ -9,6 +9,18 @@
     "O Portiño": "--stage-7"
   };
 
+  // Canvas can't read CSS custom properties, so the share-image card uses
+  // this hardcoded copy of the dark-theme stage colors from style.css.
+  const STAGE_COLOR_HEX = {
+    "Azcárraga": "#3987e5",
+    "Campo da Leña": "#d95926",
+    "Santa Margarida": "#199e70",
+    "Castelo de Santo Antón": "#c98500",
+    "Praza de María Pita": "#d55181",
+    "Praia de Riazor": "#008300",
+    "O Portiño": "#9085e9"
+  };
+
   const DEFAULT_DURATION = 60; // minutes, used for the last act on a stage each day
   const MAX_DURATION = 90; // minutes, cap when the next act starts later than this
   const MIN_DURATION = 30; // minutes, floor so a block always stays readable
@@ -24,6 +36,7 @@
     detail: null, // { act, day }
     user: null, // null (signed out) | "guest" | username
     favorites: new Set(),
+    comments: new Map(), // actId -> personal note, account-only like favorites
     favoritesOnly: false,
     authMode: "login", // "login" | "signup"
     authError: null,
@@ -73,6 +86,16 @@
 
   function actId(day, act) {
     return day.id + "::" + act.stage + "::" + act.artist;
+  }
+
+  function escapeHtml(str) {
+    const div = document.createElement("div");
+    div.textContent = str;
+    return div.innerHTML;
+  }
+
+  function commentsMapFromObject(obj) {
+    return new Map(Object.entries(obj || {}));
   }
 
   function isGuest() {
@@ -202,6 +225,7 @@
   }
 
   const artistInfoCache = new Map(); // artist name -> info object, reused across route-item thumbnails
+  let currentRouteItems = []; // the {day, act} list from the last renderRouteView(), for comment/share handlers
 
   async function loadArtistThumb(containerId, artistName) {
     let info = artistInfoCache.get(artistName);
@@ -424,6 +448,9 @@
               <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M12 2a10 10 0 1 0 10 10A10 10 0 0 0 12 2Zm4.59 14.4a.62.62 0 0 1-.86.21c-2.36-1.44-5.34-1.77-8.84-.97a.63.63 0 1 1-.28-1.23c3.83-.87 7.12-.5 9.77 1.12a.63.63 0 0 1 .21.87Zm1.22-2.72a.78.78 0 0 1-1.07.26c-2.7-1.66-6.82-2.14-10.02-1.17a.78.78 0 1 1-.45-1.49c3.65-1.11 8.19-.57 11.28 1.33a.78.78 0 0 1 .26 1.07Zm.11-2.83c-3.24-1.92-8.6-2.1-11.7-1.16a.94.94 0 1 1-.55-1.8c3.56-1.08 9.46-.87 13.19 1.34a.94.94 0 0 1-.94 1.62Z"/></svg>
               ${t(lang, "spotifyBtn")}
             </a>
+            <button class="share-btn" id="shareArtistBtn" aria-label="${t(lang, "shareBtn")}">
+              <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L7.04 9.81A3 3 0 1 0 6 15.5c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65a2.92 2.92 0 1 0 2.92-2.92Z"/></svg>
+            </button>
           </div>
         </div>
       </div>
@@ -431,6 +458,7 @@
     document.getElementById("backBtn").addEventListener("click", closeDetail);
     const starBtn = document.getElementById("detailStarBtn");
     if (starBtn) starBtn.addEventListener("click", () => toggleFavorite(day, act));
+    document.getElementById("shareArtistBtn").addEventListener("click", () => shareArtist(act));
   }
 
   function formatGenres(genres) {
@@ -519,6 +547,7 @@
     }
     state.user = null;
     state.favorites = new Set();
+    state.comments = new Map();
     state.detail = null;
     state.confirmingDelete = false;
     document.body.classList.remove("detail-open");
@@ -533,6 +562,234 @@
     }
     state.confirmingDelete = false;
     handleLogout();
+  }
+
+  // --- Sharing (artist ficha + Mi ruta) ---
+
+  function shareViaWebShareOrWhatsapp(shareData, text) {
+    if (navigator.share) {
+      navigator.share(shareData).catch(() => {
+        /* user cancelled the native share sheet — nothing to do */
+      });
+    } else {
+      window.open("https://wa.me/?text=" + encodeURIComponent(text), "_blank", "noopener");
+    }
+  }
+
+  function shareArtist(act) {
+    const lang = state.lang;
+    const spotifyUrl =
+      (state.detail && state.detail.extra && state.detail.extra.spotifyUrl) ||
+      "https://open.spotify.com/search/" + encodeURIComponent(act.artist);
+    const text = `${t(lang, "shareArtistText").replace("{artist}", act.artist)}\n${spotifyUrl}`;
+    shareViaWebShareOrWhatsapp({ title: act.artist, text }, text);
+  }
+
+  function buildRouteShareText(items) {
+    const lang = state.lang;
+    const lines = [t(lang, "shareRouteHeader")];
+    let lastDayId = null;
+    items.forEach(({ day, act }) => {
+      if (day.id !== lastDayId) {
+        lines.push("");
+        lines.push(formatDayDate(lang, day).toUpperCase());
+        lastDayId = day.id;
+      }
+      lines.push(`• ${formatTimeForDisplay(lang, act)} — ${act.artist} (${act.stage})`);
+      const comment = state.comments.get(actId(day, act));
+      if (comment) lines.push(`   💬 "${comment}"`);
+    });
+    lines.push("");
+    lines.push(t(lang, "shareRouteFooter"));
+    lines.push(location.origin);
+    return lines.join("\n");
+  }
+
+  function shareRoute(items) {
+    const text = buildRouteShareText(items);
+    shareViaWebShareOrWhatsapp({ title: t(state.lang, "routeTitle"), text }, text);
+  }
+
+  function wrapCanvasText(ctx, text, maxWidth) {
+    const words = text.split(/\s+/);
+    const lines = [];
+    let line = "";
+    for (const word of words) {
+      const test = line ? line + " " + word : word;
+      if (ctx.measureText(test).width > maxWidth && line) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = test;
+      }
+    }
+    if (line) lines.push(line);
+    return lines;
+  }
+
+  function loadCanvasImage(url) {
+    return new Promise((resolve) => {
+      if (!url) return resolve(null);
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => resolve(img);
+      img.onerror = () => resolve(null);
+      img.src = url;
+    });
+  }
+
+  function drawRoundedRect(ctx, x, y, w, h, r) {
+    ctx.beginPath();
+    ctx.moveTo(x + r, y);
+    ctx.arcTo(x + w, y, x + w, y + h, r);
+    ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r);
+    ctx.arcTo(x, y, x + w, y, r);
+    ctx.closePath();
+  }
+
+  // Renders "Mi ruta" as a downloadable poster: lineup + personal comments,
+  // meant to be shared as an image or uploaded as a Spotify playlist cover.
+  async function buildRouteImageBlob(items) {
+    const lang = state.lang;
+    const width = 1080;
+    const padding = 56;
+    const avatarSize = 84;
+    const rowGap = 26;
+    const rowHeight = avatarSize + 20;
+
+    const measureCanvas = document.createElement("canvas");
+    const mctx = measureCanvas.getContext("2d");
+    mctx.font = "500 26px system-ui, sans-serif";
+    const textX = padding + avatarSize + 28;
+    const commentMaxWidth = width - padding - textX - 40;
+
+    const rows = [];
+    let lastDayId = null;
+    items.forEach(({ day, act }) => {
+      if (day.id !== lastDayId) {
+        rows.push({ type: "day", label: formatDayDate(lang, day).toUpperCase() });
+        lastDayId = day.id;
+      }
+      const comment = state.comments.get(actId(day, act));
+      const commentLines = comment ? wrapCanvasText(mctx, comment, commentMaxWidth) : [];
+      rows.push({ type: "act", day, act, commentLines });
+    });
+
+    let height = 250;
+    rows.forEach((row) => {
+      if (row.type === "day") height += 50;
+      else {
+        height += rowHeight + rowGap;
+        if (row.commentLines.length) height += row.commentLines.length * 34 + 24 + 12;
+      }
+    });
+    height += 100;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext("2d");
+
+    ctx.fillStyle = "#0d0d0d";
+    ctx.fillRect(0, 0, width, height);
+
+    ctx.fillStyle = "#ffffff";
+    ctx.font = "800 52px system-ui, sans-serif";
+    ctx.fillText("Festival Noroeste", padding, 100);
+    ctx.fillStyle = "#c3c2b7";
+    ctx.font = "500 28px system-ui, sans-serif";
+    ctx.fillText(t(lang, "shareRouteHeader"), padding, 148);
+    ctx.strokeStyle = "#2c2c2a";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(padding, 186);
+    ctx.lineTo(width - padding, 186);
+    ctx.stroke();
+
+    let y = 246;
+    for (const row of rows) {
+      if (row.type === "day") {
+        ctx.fillStyle = "#898781";
+        ctx.font = "700 28px system-ui, sans-serif";
+        ctx.fillText(row.label, padding, y);
+        y += 50;
+        continue;
+      }
+      const { act, commentLines } = row;
+      const info = artistInfoCache.get(act.artist);
+      const img = await loadCanvasImage(info && info.image);
+      const cx = padding + avatarSize / 2;
+      const cy = y + avatarSize / 2;
+
+      ctx.fillStyle = STAGE_COLOR_HEX[act.stage] || "#666";
+      ctx.fillRect(padding - 20, y, 6, avatarSize);
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(cx, cy, avatarSize / 2, 0, Math.PI * 2);
+      ctx.closePath();
+      ctx.clip();
+      if (img) {
+        ctx.drawImage(img, padding, y, avatarSize, avatarSize);
+      } else {
+        ctx.fillStyle = STAGE_COLOR_HEX[act.stage] || "#444";
+        ctx.fillRect(padding, y, avatarSize, avatarSize);
+        ctx.fillStyle = "#fff";
+        ctx.font = "700 34px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(act.artist[0].toUpperCase(), cx, cy + 2);
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
+      }
+      ctx.restore();
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "700 36px system-ui, sans-serif";
+      ctx.fillText(act.artist, textX, y + 38);
+      ctx.fillStyle = "#c3c2b7";
+      ctx.font = "500 26px system-ui, sans-serif";
+      ctx.fillText(`${formatTimeForDisplay(lang, act)} · ${act.stage}`, textX, y + 72);
+
+      y += rowHeight;
+
+      if (commentLines.length) {
+        const bubbleHeight = commentLines.length * 34 + 24;
+        ctx.fillStyle = "#1a1a19";
+        drawRoundedRect(ctx, textX, y, commentMaxWidth, bubbleHeight, 14);
+        ctx.fill();
+        ctx.fillStyle = "#ffffff";
+        ctx.font = "italic 500 26px system-ui, sans-serif";
+        commentLines.forEach((line, i) => {
+          ctx.fillText(line, textX + 18, y + 30 + i * 34);
+        });
+        y += bubbleHeight + 12;
+      }
+      y += rowGap;
+    }
+
+    ctx.fillStyle = "#898781";
+    ctx.font = "500 22px system-ui, sans-serif";
+    ctx.fillText(t(lang, "shareRouteFooter"), padding, height - 56);
+    ctx.fillStyle = "#c3c2b7";
+    ctx.font = "700 26px system-ui, sans-serif";
+    ctx.fillText(location.origin, padding, height - 22);
+
+    return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+  }
+
+  async function downloadRouteImage(items) {
+    const blob = await buildRouteImageBlob(items);
+    if (!blob) return;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "mi-ruta-noroeste-2026.png";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
   }
 
   // --- Bottom nav & Mi ruta / Usuario pages ---
@@ -599,7 +856,16 @@
       return;
     }
 
-    let html = `<div class="page-inner"><h2>${t(lang, "routeTitle")}</h2>`;
+    currentRouteItems = items;
+
+    let html = `<div class="page-inner">
+      <div class="route-header">
+        <h2>${t(lang, "routeTitle")}</h2>
+        <div class="route-share-actions">
+          <button class="icon-btn" id="routeShareBtn">🔗 ${t(lang, "shareBtn")}</button>
+          <button class="icon-btn" id="routeDownloadBtn">⬇️ ${t(lang, "downloadImageBtn")}</button>
+        </div>
+      </div>`;
     let lastDayId = null;
     let lastAct = null;
     const connectors = [];
@@ -628,7 +894,8 @@
             <span class="route-artist">${act.artist}</span>
             <span class="route-stage">${act.stage}</span>
           </span>
-        </button>`;
+        </button>
+        <div class="route-comment" data-idx="${idx}">${routeCommentBlockHTML(idx)}</div>`;
       lastDayId = day.id;
       lastAct = act;
     });
@@ -642,8 +909,104 @@
       });
     });
 
+    items.forEach((_, idx) => wireCommentBlock(idx));
+
+    document.getElementById("routeShareBtn").addEventListener("click", () => shareRoute(items));
+    document.getElementById("routeDownloadBtn").addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      const original = btn.innerHTML;
+      btn.disabled = true;
+      btn.textContent = t(lang, "generatingImage");
+      try {
+        await downloadRouteImage(items);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = original;
+      }
+    });
+
     connectors.forEach(({ id, from, to }) => loadRouteConnector(id, from, to));
     thumbs.forEach(({ id, artist }) => loadArtistThumb(id, artist));
+  }
+
+  // --- Personal comments on Mi ruta stops ---
+
+  function routeCommentBlockHTML(idx) {
+    const item = currentRouteItems[idx];
+    const lang = state.lang;
+    const comment = state.comments.get(actId(item.day, item.act));
+    if (comment) {
+      return `
+        <div class="comment-bubble">
+          <p>${escapeHtml(comment)}</p>
+          <button class="comment-edit-btn" data-idx="${idx}" aria-label="${t(lang, "editCommentBtn")}">✏️</button>
+        </div>`;
+    }
+    return `<button class="comment-add-btn" data-idx="${idx}">💬 ${t(lang, "addCommentBtn")}</button>`;
+  }
+
+  function wireCommentBlock(idx) {
+    const container = els.routeView.querySelector(`.route-comment[data-idx="${idx}"]`);
+    if (!container) return;
+    const btn = container.querySelector(".comment-add-btn, .comment-edit-btn");
+    if (btn) {
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        startCommentEdit(idx);
+      });
+    }
+  }
+
+  function renderRouteCommentBlock(idx) {
+    const container = els.routeView.querySelector(`.route-comment[data-idx="${idx}"]`);
+    if (!container) return;
+    container.innerHTML = routeCommentBlockHTML(idx);
+    wireCommentBlock(idx);
+  }
+
+  function startCommentEdit(idx) {
+    const item = currentRouteItems[idx];
+    if (!item) return;
+    const container = els.routeView.querySelector(`.route-comment[data-idx="${idx}"]`);
+    if (!container) return;
+    const lang = state.lang;
+    const current = state.comments.get(actId(item.day, item.act)) || "";
+    container.innerHTML = `
+      <form class="comment-form">
+        <textarea maxlength="200" placeholder="${t(lang, "commentPlaceholder")}">${escapeHtml(current)}</textarea>
+        <div class="comment-form-actions">
+          <button type="submit" class="comment-save-btn">${t(lang, "saveBtn")}</button>
+          <button type="button" class="comment-cancel-btn" data-action="cancel">${t(lang, "cancelBtn")}</button>
+          ${current ? `<button type="button" class="comment-delete-btn" data-action="delete">${t(lang, "deleteBtn")}</button>` : ""}
+        </div>
+      </form>`;
+    const form = container.querySelector("form");
+    const textarea = form.querySelector("textarea");
+    textarea.focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    form.addEventListener("click", (e) => e.stopPropagation());
+    form.addEventListener("submit", (e) => {
+      e.preventDefault();
+      saveComment(idx, textarea.value);
+    });
+    form.querySelector('[data-action="cancel"]').addEventListener("click", () => renderRouteCommentBlock(idx));
+    const delBtn = form.querySelector('[data-action="delete"]');
+    if (delBtn) delBtn.addEventListener("click", () => saveComment(idx, ""));
+  }
+
+  async function saveComment(idx, text) {
+    const item = currentRouteItems[idx];
+    if (!item) return;
+    const id = actId(item.day, item.act);
+    const trimmed = text.trim();
+    if (trimmed) state.comments.set(id, trimmed);
+    else state.comments.delete(id);
+    renderRouteCommentBlock(idx);
+    try {
+      await Api.setComment(id, trimmed);
+    } catch {
+      /* best-effort; the comment stays client-side even if the request fails */
+    }
   }
 
   async function loadRouteConnector(containerId, from, to) {
@@ -859,6 +1222,7 @@
       const data = isSignup ? await Api.signup(username, password) : await Api.login(username, password);
       state.user = data.username;
       state.favorites = new Set(await Api.getFavorites());
+      state.comments = commentsMapFromObject(await Api.getComments());
       state.authError = null;
       hideGate();
       renderAll();
@@ -871,6 +1235,7 @@
   function handleGuestLogin() {
     state.user = "guest";
     state.favorites = new Set(); // favorites are an account-only feature
+    state.comments = new Map();
     state.authError = null;
     hideGate();
     renderAll();
@@ -907,6 +1272,7 @@
       if (me.username) {
         state.user = me.username;
         state.favorites = new Set(await Api.getFavorites());
+        state.comments = commentsMapFromObject(await Api.getComments());
         renderAll();
         return;
       }
@@ -918,6 +1284,7 @@
     // for anyone who wants an account.
     state.user = "guest";
     state.favorites = new Set();
+    state.comments = new Map();
     renderAll();
   }
 
