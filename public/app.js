@@ -687,7 +687,14 @@
       L.circleMarker(latlngs[latlngs.length - 1], { radius: 6, color: "#fff", weight: 2, fillColor: "#e34948", fillOpacity: 1 }).addTo(
         map
       );
-      map.fitBounds(line.getBounds(), { padding: [16, 16] });
+      // The container has just been inserted via innerHTML, so Leaflet can
+      // compute the wrong pixel size/bounds if fitBounds runs in the same
+      // tick (every map ends up framed the same way) — invalidateSize
+      // after a layout pass fixes it.
+      setTimeout(() => {
+        map.invalidateSize();
+        map.fitBounds(line.getBounds(), { padding: [16, 16] });
+      }, 0);
       mapEl.addEventListener("click", () => window.open(data.directionsUrl, "_blank", "noopener"));
     }
   }

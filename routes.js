@@ -32,6 +32,13 @@ function directionsUrl(fromStage, toStage) {
   return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=walking`;
 }
 
+// The public OSRM demo server only has a driving profile compiled in — it
+// accepts the /foot/ path segment but still weights `duration` using car
+// speeds (~25-35 km/h), so trusting it gives absurdly fast "walking" times.
+// The route `distance` (actual path length over the street/path network) is
+// fine though, so minutes are derived from that at a fixed walking pace.
+const WALK_METERS_PER_MINUTE = 80; // ~4.8 km/h
+
 // Only called by scripts/sweep-routes.js — never on a live user request.
 async function fetchAndStoreRoute(fromStage, toStage) {
   const a = STAGE_COORDS[fromStage];
@@ -45,7 +52,7 @@ async function fetchAndStoreRoute(fromStage, toStage) {
   const route = data.routes && data.routes[0];
   if (!route) throw new Error("no route found");
 
-  const minutes = Math.round(route.duration / 60);
+  const minutes = Math.max(1, Math.round(route.distance / WALK_METERS_PER_MINUTE));
   const geometry = route.geometry.coordinates; // [ [lng, lat], ... ]
 
   upsert.run({
