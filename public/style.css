@@ -19,6 +19,8 @@
   --stage-6: #008300; /* Praia de Riazor */
   --stage-7: #4a3aa7; /* O Portiño */
 
+  --accent-cyan: #17c3ce;
+
   --hour-width: 68px;
   --row-height: 64px;
   --label-width: 108px;
@@ -658,60 +660,36 @@ body.gate-open main {
   flex-direction: column;
   gap: 4px;
 }
-.gate-card h1 {
-  margin: 0 0 14px;
+.gate-mode-heading {
+  margin: 28px 0 20px;
   font-size: 1.5rem;
-}
-.auth-tabs {
-  display: flex;
-  gap: 4px;
-  padding: 3px;
-  border-radius: 10px;
-  background: var(--surface);
-  border: 1px solid var(--border);
-  margin-bottom: 12px;
-}
-.auth-tab {
-  flex: 1 1 0;
-  padding: 8px;
-  border: none;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--ink-2);
-  font: inherit;
-  font-weight: 600;
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-.auth-tab.active {
-  background: var(--stage-1);
-  color: #fff;
-}
-.gate-subtitle {
-  margin: 0 0 16px;
-  color: var(--ink-2);
-  font-size: 0.85rem;
+  font-weight: 400;
 }
 .gate-card form {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 24px;
 }
 .gate-card label {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  font-size: 0.82rem;
+  gap: 10px;
+  font-size: 0.95rem;
   color: var(--ink-2);
 }
 .gate-card input {
   font: inherit;
-  font-size: 1rem;
-  padding: 10px 12px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--surface);
+  font-size: 1.05rem;
+  padding: 0 0 8px;
+  border: none;
+  border-bottom: 1px solid var(--ink-muted);
+  border-radius: 0;
+  background: none;
   color: var(--ink);
+}
+.gate-card input:focus {
+  outline: none;
+  border-bottom-color: var(--ink);
 }
 .auth-error {
   color: #d03b3b;
@@ -719,15 +697,26 @@ body.gate-open main {
   margin: 0;
 }
 .auth-submit {
+  flex: 1 1 auto;
   margin-top: 4px;
-  padding: 12px;
+  padding: 14px;
   border: none;
-  border-radius: 10px;
-  background: var(--stage-1);
-  color: #fff;
+  border-radius: 999px;
+  background: var(--accent-cyan);
+  color: #06181a;
   font: inherit;
   font-weight: 700;
   cursor: pointer;
+}
+.gate-form-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+.gate-form-actions .guest-btn {
+  width: auto;
+  flex: 1 1 0;
+  margin-top: 0;
 }
 .gate-divider {
   display: flex;
@@ -743,6 +732,31 @@ body.gate-open main {
   flex: 1;
   height: 1px;
   background: var(--gridline);
+}
+.gate-switch-mode {
+  margin: 16px 0 0;
+  color: var(--ink-2);
+  font-size: 0.85rem;
+}
+.gate-switch-link {
+  border: none;
+  background: none;
+  padding: 0;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: underline;
+  cursor: pointer;
+}
+.gate-warning {
+  margin: 20px 0 0;
+}
+.gate-warning p {
+  margin: 0 0 12px;
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
 }
 .guest-btn {
   width: 100%;

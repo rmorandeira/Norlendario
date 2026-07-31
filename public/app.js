@@ -1350,51 +1350,64 @@
     const isSignup = state.authMode === "signup";
     els.authGate.innerHTML = `
       <div class="gate-card">
-        <h1>${t(lang, "gateTitle")}</h1>
-        <div class="auth-tabs">
-          <button type="button" class="auth-tab${!isSignup ? " active" : ""}" data-mode="login">${t(lang, "loginBtn")}</button>
-          <button type="button" class="auth-tab${isSignup ? " active" : ""}" data-mode="signup">${t(lang, "signupBtn")}</button>
+        <div class="route-header-text">
+          <h1 class="app-name-heading">${t(lang, "appName")}</h1>
+          <p class="page-subtitle">${t(lang, "routeSubtitle")}</p>
         </div>
-        <p class="gate-subtitle">${t(lang, isSignup ? "gateSubtitleSignup" : "gateSubtitleLogin")}</p>
+        <h2 class="gate-mode-heading">${t(lang, isSignup ? "gateModeSignup" : "gateModeLogin")}</h2>
         <form id="authForm" novalidate>
-          <label>${t(lang, "usernameLabel")}
+          <label>${t(lang, "nameFieldLabel")}
             <input type="text" name="username" autocomplete="username" required minlength="3" maxlength="32" />
           </label>
           <label>${t(lang, "passwordLabel")}
             <input type="password" name="password" autocomplete="${isSignup ? "new-password" : "current-password"}" required minlength="4" />
           </label>
+          ${state.authError ? `<p class="auth-error">${state.authError}</p>` : ""}
           ${
             isSignup
-              ? `<label>${t(lang, "confirmPasswordLabel")}
-            <input type="password" name="confirmPassword" autocomplete="new-password" required minlength="4" />
-          </label>`
-              : ""
+              ? `<div class="gate-form-actions">
+                   <button type="button" class="guest-btn" id="cancelSignupBtn">${t(lang, "cancelBtn")}</button>
+                   <button type="submit" class="auth-submit">${t(lang, "signupBtn")}</button>
+                 </div>`
+              : `<button type="submit" class="auth-submit">${t(lang, "loginBtn")}</button>`
           }
-          ${state.authError ? `<p class="auth-error">${state.authError}</p>` : ""}
-          <button type="submit" class="auth-submit">${t(lang, isSignup ? "signupBtn" : "loginBtn")}</button>
         </form>
-        <div class="gate-divider"><span>${t(lang, "orDivider")}</span></div>
-        <button class="guest-btn" id="guestBtn">${t(lang, "guestBtn")}</button>
+        ${
+          isSignup
+            ? `<div class="gate-warning">
+                 <p>${t(lang, "signupWarning1")}</p>
+                 <p>${t(lang, "signupWarning2")}</p>
+                 <p>${t(lang, "signupWarning3")}</p>
+               </div>`
+            : `<div class="gate-divider"><span>${t(lang, "orDivider")}</span></div>
+               <button class="guest-btn" id="guestBtn">${t(lang, "guestBtn")}</button>
+               <p class="gate-switch-mode">${t(lang, "noAccountPrompt")} <button type="button" class="gate-switch-link" id="switchToSignupBtn">${t(lang, "createAccountLink")}</button></p>`
+        }
         <p class="gate-disclaimer">${t(lang, "unofficialDisclaimer")}<br />v${APP_VERSION}</p>
       </div>
     `;
 
     document.getElementById("authForm").addEventListener("submit", handleAuthSubmit);
-    els.authGate.querySelectorAll(".auth-tab").forEach((tabBtn) => {
-      tabBtn.addEventListener("click", () => {
-        state.authMode = tabBtn.dataset.mode;
+    if (isSignup) {
+      document.getElementById("cancelSignupBtn").addEventListener("click", () => {
+        state.authMode = "login";
         state.authError = null;
         renderGate();
       });
-    });
-    document.getElementById("guestBtn").addEventListener("click", handleGuestLogin);
+    } else {
+      document.getElementById("guestBtn").addEventListener("click", handleGuestLogin);
+      document.getElementById("switchToSignupBtn").addEventListener("click", () => {
+        state.authMode = "signup";
+        state.authError = null;
+        renderGate();
+      });
+    }
   }
 
   function authErrorMessage(err) {
     const map = {
       username_length: "errUsernameLength",
       password_length: "errPasswordLength",
-      password_mismatch: "errPasswordMismatch",
       username_taken: "errUsernameTaken",
       invalid_credentials: "errInvalidCredentials"
     };
@@ -1407,12 +1420,6 @@
     const username = form.username.value.trim();
     const password = form.password.value;
     const isSignup = state.authMode === "signup";
-
-    if (isSignup && password !== form.confirmPassword.value) {
-      state.authError = authErrorMessage(new Error("password_mismatch"));
-      renderGate();
-      return;
-    }
 
     try {
       const data = isSignup ? await Api.signup(username, password) : await Api.login(username, password);
