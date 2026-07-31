@@ -219,6 +219,14 @@ app.post("/api/auth/signup", (req, res) => {
   req.session.userId = userId;
   req.session.username = username;
   res.json({ username });
+
+  // Fire-and-forget: a failed welcome email shouldn't fail the signup that
+  // already succeeded and responded above.
+  sendEmail({
+    to: email,
+    subject: "Bienvenido/a a Norlendario",
+    html: `<p>Hola ${username},</p><p>Tu cuenta de Norlendario se ha creado correctamente con este correo (${email}).</p><p>Puedes usarla ya para guardar tus favoritos del Festival Noroeste 2026, compartir tu ruta y comentar. Si en algún momento olvidas tu contraseña, podrás recuperarla desde la app usando este mismo correo.</p><p>Un saludo.</p>`
+  }).catch((err) => console.error("Failed to send welcome email:", err.message));
 });
 
 app.post("/api/auth/forgot-password", async (req, res) => {
