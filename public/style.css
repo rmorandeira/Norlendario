@@ -727,6 +727,16 @@ body.shared-route-mode .bottom-nav {
   font-size: 0.95rem;
   color: var(--ink-2);
 }
+.gate-label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+}
+.gate-forgot-inline {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
 .gate-card input {
   font: inherit;
   font-size: 1.05rem;

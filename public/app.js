@@ -2018,7 +2018,15 @@
                  </label>`
               : ""
           }
-          <label>${t(lang, "passwordLabel")}
+          <label>
+            <span class="gate-label-row">
+              <span>${t(lang, "passwordLabel")}</span>
+              ${
+                isSignup
+                  ? ""
+                  : `<button type="button" class="gate-switch-link gate-forgot-inline" id="forgotPasswordBtn">${t(lang, "forgotPasswordLink")}</button>`
+              }
+            </span>
             <input type="password" name="password" autocomplete="${isSignup ? "new-password" : "current-password"}" required minlength="4" />
           </label>
           ${state.authError ? `<p class="auth-error">${state.authError}</p>` : ""}
@@ -2048,8 +2056,7 @@
             : `<div class="gate-divider"><span>${t(lang, "orDivider")}</span></div>
                <div class="google-btn-container" id="googleLoginBtn"></div>
                <button class="guest-btn" id="guestBtn">${t(lang, "guestBtn")}</button>
-               <p class="gate-switch-mode">${t(lang, "noAccountPrompt")} <button type="button" class="gate-switch-link" id="switchToSignupBtn">${t(lang, "createAccountLink")}</button></p>
-               <p class="gate-switch-mode"><button type="button" class="gate-switch-link" id="forgotPasswordBtn">${t(lang, "forgotPasswordLink")}</button></p>`
+               <p class="gate-switch-mode">${t(lang, "noAccountPrompt")} <button type="button" class="gate-switch-link" id="switchToSignupBtn">${t(lang, "createAccountLink")}</button></p>`
         }`;
     }
 
