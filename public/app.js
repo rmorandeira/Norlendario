@@ -2039,7 +2039,13 @@
           }
           ${
             isSignup
-              ? `<div class="gate-form-actions">
+              ? `<div class="gate-warning">
+                   <label class="gate-consent-label">
+                     <input type="checkbox" id="privacyConsentCheckbox" />
+                     <span>${t(lang, "privacyConsentLabel").replace("{link}", `<button type="button" class="gate-switch-link" id="openPrivacyPolicyBtn">${t(lang, "privacyPolicyLink")}</button>`)}</span>
+                   </label>
+                 </div>
+                 <div class="gate-form-actions">
                    <button type="button" class="guest-btn" id="cancelSignupBtn">${t(lang, "cancelBtn")}</button>
                    <button type="submit" class="auth-submit">${t(lang, "signupBtn")}</button>
                  </div>`
@@ -2048,12 +2054,7 @@
         </form>
         ${
           isSignup
-            ? `<div class="gate-warning">
-                 <label class="gate-consent-label">
-                   <input type="checkbox" id="privacyConsentCheckbox" />
-                   <span>${t(lang, "privacyConsentLabel").replace("{link}", `<button type="button" class="gate-switch-link" id="openPrivacyPolicyBtn">${t(lang, "privacyPolicyLink")}</button>`)}</span>
-                 </label>
-               </div>`
+            ? ""
             : `<button class="guest-btn" id="guestBtn">${t(lang, "guestBtn")}</button>
                <p class="gate-switch-mode">${t(lang, "noAccountPrompt")} <button type="button" class="gate-switch-link" id="switchToSignupBtn">${t(lang, "createAccountLink")}</button></p>`
         }`;

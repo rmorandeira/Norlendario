@@ -840,8 +840,9 @@ body.shared-route-mode .bottom-nav {
 .gate-warning {
   margin: 20px 0 0;
 }
-.gate-consent-label {
+.gate-warning .gate-consent-label {
   display: flex;
+  flex-direction: row;
   align-items: flex-start;
   gap: 10px;
   margin-top: 4px;
