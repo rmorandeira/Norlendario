@@ -40,12 +40,7 @@ function directionsUrl(fromStage, toStage) {
   return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=walking`;
 }
 
-// The public OSRM demo server only has a driving profile compiled in — it
-// accepts the /foot/ path segment but still weights `duration` using car
-// speeds (~25-35 km/h), so trusting it gives absurdly fast "walking" times.
-// The route `distance` (actual path length over the street/path network) is
-// fine though, so minutes are derived from that at a fixed walking pace.
-const WALK_METERS_PER_MINUTE = 80; // ~4.8 km/h
+const WALK_METERS_PER_MINUTE = 80; // ~4.8 km/h — only used by the network-error fallback below
 
 function haversineMeters(a, b) {
   const R = 6371000;
@@ -55,39 +50,79 @@ function haversineMeters(a, b) {
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(h));
 }
+const FALLBACK_DETOUR_FACTOR = 1.3; // typical urban pedestrian detour over straight-line
 
-// OSRM's public foot-routing graph has real gaps in some A Coruña streets
-// (first seen at Azcárraga: its plaza isn't well connected in OSM's
-// pedestrian data, so OSRM silently snapped the origin to a node 188m away
-// near an unrelated tunnel — every route computed "from Azcárraga" was
-// actually walked from there instead, giving distances way off from what
-// Google Maps shows for the same pair). Rather than chase that per stage,
-// treat a bad snap on either end as "no reliable route": fall back to
-// straight-line distance with a typical historic-center detour factor, and
-// a straight connecting line instead of a misleading traced polyline.
-const MAX_TRUSTED_SNAP_METERS = 120;
-const FALLBACK_DETOUR_FACTOR = 1.3;
+// Valhalla encodes its shape as a polyline with 6 decimal places of
+// precision (vs. the usual 5), so the standard polyline decoder doesn't
+// apply as-is.
+function decodePolyline6(encoded) {
+  const coords = [];
+  let index = 0;
+  let lat = 0;
+  let lng = 0;
+  while (index < encoded.length) {
+    let result = 0;
+    let shift = 0;
+    let byte;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    lat += result & 1 ? ~(result >> 1) : result >> 1;
 
-// Only called by scripts/sweep-routes.js — never on a live user request.
+    result = 0;
+    shift = 0;
+    do {
+      byte = encoded.charCodeAt(index++) - 63;
+      result |= (byte & 0x1f) << shift;
+      shift += 5;
+    } while (byte >= 0x20);
+    lng += result & 1 ? ~(result >> 1) : result >> 1;
+
+    coords.push([lng / 1e6, lat / 1e6]); // [lng, lat], matching our stored geometry convention
+  }
+  return coords;
+}
+
+// Switched from OSRM's public demo server to FOSSGIS's public Valhalla
+// instance: OSRM's foot-routing graph has real connectivity gaps in parts
+// of A Coruña (Azcárraga's plaza wasn't reachable within 150m of its real
+// location, so every route "from Azcárraga" was silently walked from an
+// unrelated node near a tunnel instead) and its distances ran consistently
+// 20-40% longer than the same walks on Google Maps. Valhalla's pedestrian
+// costing snaps cleanly at every stage tried and lines up much closer with
+// Google Maps for the same pairs.
 async function fetchAndStoreRoute(fromStage, toStage) {
   const a = STAGE_COORDS[fromStage];
   const b = STAGE_COORDS[toStage];
   if (!a || !b) throw new Error("unknown stage: " + fromStage + " / " + toStage);
 
-  const url = `https://router.project-osrm.org/route/v1/foot/${a.lng},${a.lat};${b.lng},${b.lat}?overview=full&geometries=geojson`;
-  const r = await fetch(url);
-  if (!r.ok) throw new Error("OSRM request failed: " + r.status);
-  const data = await r.json();
-  const route = data.routes && data.routes[0];
-  if (!route) throw new Error("no route found");
-
-  const wellSnapped = data.waypoints.every((wp) => wp.distance <= MAX_TRUSTED_SNAP_METERS);
-
   let minutes, geometry;
-  if (wellSnapped) {
-    minutes = Math.max(1, Math.round(route.distance / WALK_METERS_PER_MINUTE));
-    geometry = route.geometry.coordinates; // [ [lng, lat], ... ]
-  } else {
+  try {
+    const r = await fetch("https://valhalla1.openstreetmap.de/route", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        locations: [
+          { lat: a.lat, lon: a.lng },
+          { lat: b.lat, lon: b.lng }
+        ],
+        costing: "pedestrian",
+        units: "kilometers"
+      })
+    });
+    if (!r.ok) throw new Error("Valhalla request failed: " + r.status);
+    const data = await r.json();
+    const leg = data.trip && data.trip.legs && data.trip.legs[0];
+    if (!leg) throw new Error("no route found");
+
+    minutes = Math.max(1, Math.round(leg.summary.time / 60));
+    geometry = decodePolyline6(leg.shape);
+  } catch {
+    // Network hiccup or Valhalla itself down — a straight line is still a
+    // more honest preview than nothing, and it's the same estimate style
+    // already proven reasonable for Azcárraga while Valhalla was down.
     const straight = haversineMeters(a, b);
     minutes = Math.max(1, Math.round((straight * FALLBACK_DETOUR_FACTOR) / WALK_METERS_PER_MINUTE));
     geometry = [

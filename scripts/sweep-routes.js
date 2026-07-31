@@ -1,6 +1,7 @@
 // One-off batch job: computes the walking route (minutes + geometry) between
-// every pair of stages via OSRM's public foot-routing server and caches it
-// in stage_routes, so the app never calls OSRM on a live user request.
+// every pair of stages via FOSSGIS's public Valhalla foot-routing server
+// and caches it in stage_routes, so the app never calls out to it on a
+// live user request.
 //
 // Usage: node scripts/sweep-routes.js
 
@@ -29,7 +30,7 @@ async function main() {
     } catch (err) {
       console.log("ERROR: " + err.message);
     }
-    await delay(1100); // stay well under OSRM's public demo rate limit
+    await delay(1100); // stay well under Valhalla's public demo rate limit
   }
 
   console.log("\nDone.");
