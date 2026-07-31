@@ -45,6 +45,8 @@ const I18N = {
     favoriteRemove: "Quitar de favoritos",
     attendingCount: "{count} asistirán",
     attendingCountOne: "{count} asistirá",
+    attendeesCount: "{count} asistentes",
+    attendeesCountOne: "{count} asistente",
 
     navCalendar: "Calendario",
     navRoute: "Mi ruta",
@@ -133,6 +135,8 @@ const I18N = {
     favoriteRemove: "Remove from favorites",
     attendingCount: "{count} attending",
     attendingCountOne: "{count} attending",
+    attendeesCount: "{count} attendees",
+    attendeesCountOne: "{count} attendee",
 
     navCalendar: "Calendar",
     navRoute: "My route",

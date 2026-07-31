@@ -450,6 +450,7 @@
     const lang = state.lang;
     const spotifyUrl = (state.detail.extra && state.detail.extra.spotifyUrl) || "https://open.spotify.com/search/" + encodeURIComponent(act.artist);
     const fav = isFavorite(day, act);
+    const favCount = state.favCounts.get(actId(day, act)) || 0;
     const starHTML = isGuest()
       ? ""
       : `<button class="star-btn detail-star${fav ? " is-fav" : ""}" id="detailStarBtn" aria-label="${t(lang, fav ? "favoriteRemove" : "favoriteAdd")}">
@@ -464,9 +465,16 @@
           <div class="event-meta">
             <div class="event-meta-row">
               <span class="event-date">${formatDayDate(lang, day)}</span>
-              <a class="event-venue" href="${mapsUrl(act.stage)}" target="_blank" rel="noopener noreferrer">
-                <i style="background:var(${STAGE_COLOR_VARS[act.stage]})"></i>${act.stage}
-              </a>
+              <div class="event-venue-col">
+                <a class="event-venue" href="${mapsUrl(act.stage)}" target="_blank" rel="noopener noreferrer">
+                  <i style="background:var(${STAGE_COLOR_VARS[act.stage]})"></i>${act.stage}
+                </a>
+                ${
+                  favCount > 0
+                    ? `<span class="event-attendees">${t(lang, favCount === 1 ? "attendeesCountOne" : "attendeesCount").replace("{count}", favCount)}</span>`
+                    : ""
+                }
+              </div>
             </div>
             <div class="event-time">${formatTimeForDisplay(lang, act)}</div>
           </div>
@@ -1258,15 +1266,15 @@
         <div class="settings-row">
           <span>${t(lang, "languageLabel")}</span>
           <button class="mode-switch" id="langToggleBtn" role="switch" aria-checked="${isEn}" aria-label="${t(lang, "languageLabel")}">
-            <span class="mode-switch-label">${isEn ? "EN" : "ES"}</span>
             <span class="mode-switch-dot"></span>
+            <span class="mode-switch-label">${isEn ? "EN" : "ES"}</span>
           </button>
         </div>
         <div class="settings-row">
           <span>${t(lang, "themeLabel")}</span>
           <button class="mode-switch" id="themeToggleBtn" role="switch" aria-checked="${isDark}" aria-label="${t(lang, "themeLabel")}">
-            <span class="mode-switch-label">${isDark ? "🌙" : "☀️"}</span>
             <span class="mode-switch-dot"></span>
+            <span class="mode-switch-label">${isDark ? "🌙" : "☀️"}</span>
           </button>
         </div>
 
