@@ -796,6 +796,16 @@ body.shared-route-mode .bottom-nav {
   justify-content: center;
   margin: 14px 0;
 }
+/* Google renders the button in a cross-origin iframe we can't restyle
+   directly — clipping it to a pill here keeps its corners consistent
+   with the rest of the app's buttons no matter what Google draws inside. */
+.google-btn-container > div {
+  border-radius: 999px !important;
+  overflow: hidden;
+}
+.google-btn-container iframe {
+  border-radius: 999px;
+}
 .gate-switch-mode {
   margin: 16px 0 0;
   color: var(--ink-2);

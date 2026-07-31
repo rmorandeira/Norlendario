@@ -2199,8 +2199,14 @@
       client_id: GOOGLE_CLIENT_ID,
       callback: (response) => handleGoogleCredential(response, intent)
     });
+    // Google renders this in a cross-origin iframe, so CSS can't reach
+    // inside it — shape/theme here are the only knobs we get. The
+    // "signed in as X" personalized state Google shows for a returning
+    // session ignores the dark theme and stays light regardless, so the
+    // container below gives it a matching pill clip instead of fighting it.
     google.accounts.id.renderButton(container, {
       theme: effectiveTheme() === "dark" ? "filled_black" : "outline",
+      shape: "pill",
       size: "large",
       width: 300,
       text: intent === "signup" ? "signup_with" : "signin_with"
