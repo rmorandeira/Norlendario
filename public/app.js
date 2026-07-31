@@ -41,7 +41,8 @@
     user: null, // null (signed out) | "guest" | username
     favorites: new Set(),
     favCounts: new Map(), // actId -> public aggregate favorite count, visible to guests too
-    comments: new Map(), // actId -> personal note, account-only like favorites
+    comments: new Map(), // actId -> comment thread (array), account-only like favorites
+    hasUnreadComments: false, // someone else commented on my route since I last left the tab
     favoritesOnly: false,
     authMode: "login", // "login" | "signup"
     authError: null,
@@ -103,16 +104,23 @@
     return new Map(Object.entries(obj || {}));
   }
 
-  function formatCommentMeta(lang, updatedAt) {
-    if (!updatedAt) return "";
-    const d = new Date(updatedAt.replace(" ", "T") + "Z");
-    if (isNaN(d)) return "";
+  function hasAnyUnreadComment(commentsMap) {
+    for (const list of commentsMap.values()) {
+      if (list.some((c) => c.isNew)) return true;
+    }
+    return false;
+  }
+
+  function formatCommentMeta(lang, createdAt, authorName) {
+    if (!createdAt) return authorName || "";
+    const d = new Date(createdAt.replace(" ", "T") + "Z");
+    if (isNaN(d)) return authorName || "";
     const day = d.getDate();
     const month = d.toLocaleDateString(lang === "en" ? "en-US" : "es-ES", { month: "short" }).replace(".", "");
     const monthCap = month.charAt(0).toUpperCase() + month.slice(1);
     const hh = String(d.getHours()).padStart(2, "0");
     const mm = String(d.getMinutes()).padStart(2, "0");
-    return `${day} ${monthCap} ${hh}:${mm} · ${state.user}`;
+    return `${day} ${monthCap} ${hh}:${mm}${authorName ? " · " + authorName : ""}`;
   }
 
   function isGuest() {
@@ -451,7 +459,7 @@
     const spotifyUrl = (state.detail.extra && state.detail.extra.spotifyUrl) || "https://open.spotify.com/search/" + encodeURIComponent(act.artist);
     const fav = isFavorite(day, act);
     const favCount = state.favCounts.get(actId(day, act)) || 0;
-    const starHTML = isGuest()
+    const starHTML = !state.user || isGuest()
       ? ""
       : `<button class="star-btn detail-star${fav ? " is-fav" : ""}" id="detailStarBtn" aria-label="${t(lang, fav ? "favoriteRemove" : "favoriteAdd")}">
           <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" d="M12 3.5l2.47 5.15 5.53.76-4 3.98.95 5.61L12 16.3l-4.95 2.7.95-5.61-4-3.98 5.53-.76z"/></svg>
@@ -622,7 +630,7 @@
     shareViaWebShareOrWhatsapp({ title: act.artist, text }, text);
   }
 
-  function buildRouteShareText(items) {
+  async function buildRouteShareText(items) {
     const lang = state.lang;
     const lines = [t(lang, "shareRouteHeader")];
     let lastDayId = null;
@@ -633,12 +641,19 @@
         lastDayId = day.id;
       }
       lines.push(`• ${formatTimeForDisplay(lang, act)} — ${act.artist} (${act.stage})`);
-      const comment = state.comments.get(actId(day, act));
-      if (comment) lines.push(`   💬 "${comment.comment}"`);
+      const myComment = (state.comments.get(actId(day, act)) || []).find((c) => c.mine);
+      if (myComment) lines.push(`   💬 "${myComment.comment}"`);
     });
     lines.push("");
     lines.push(t(lang, "shareRouteFooter"));
-    lines.push(APP_URL);
+    let shareUrl = APP_URL;
+    try {
+      const link = await Api.getShareLink();
+      if (link && link.token) shareUrl = `${APP_URL}/ruta/${link.token}`;
+    } catch {
+      /* fall back to the generic app URL */
+    }
+    lines.push(shareUrl);
     return lines.join("\n");
   }
 
@@ -661,7 +676,7 @@
     const blob = await buildRouteStoryBlob(items);
     if (!blob) return;
     const file = new File([blob], "mi-ruta-noroeste-2026.png", { type: "image/png" });
-    const text = buildRouteShareText(items);
+    const text = await buildRouteShareText(items);
 
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
@@ -819,8 +834,8 @@
         rows.push({ type: "day", label: formatDayDate(lang, day).toUpperCase() });
         lastDayId = day.id;
       }
-      const comment = state.comments.get(actId(day, act));
-      const commentLines = comment ? wrapCanvasText(mctx, comment.comment, commentMaxWidth) : [];
+      const myComment = (state.comments.get(actId(day, act)) || []).find((c) => c.mine);
+      const commentLines = myComment ? wrapCanvasText(mctx, myComment.comment, commentMaxWidth) : [];
       rows.push({ type: "act", act, commentLines });
     });
 
@@ -940,28 +955,40 @@
 
   // --- Bottom nav & Mi ruta / Usuario pages ---
 
+  function markCommentsReadIfNeeded() {
+    if (!state.hasUnreadComments || isGuest()) return;
+    state.hasUnreadComments = false;
+    state.comments.forEach((list) => list.forEach((c) => (c.isNew = false)));
+    Api.markCommentsRead();
+  }
+
   function renderBottomNav() {
     const labels = { calendar: "navCalendar", route: "navRoute", user: "navUser" };
     els.bottomNav.innerHTML = Object.keys(NAV_ICONS)
       .map(
         (view) => `
         <button class="bottom-nav-btn${state.activeView === view ? " active" : ""}" data-view="${view}">
-          ${NAV_ICONS[view]}
+          <span class="bottom-nav-icon-wrap">
+            ${NAV_ICONS[view]}
+            ${view === "route" && state.hasUnreadComments ? `<span class="bottom-nav-dot"></span>` : ""}
+          </span>
           <span>${t(state.lang, labels[view])}</span>
         </button>`
       )
       .join("");
     els.bottomNav.querySelectorAll(".bottom-nav-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
-        state.activeView = btn.dataset.view;
+        const nextView = btn.dataset.view;
+        if (state.activeView === "route" && nextView !== "route") markCommentsReadIfNeeded();
+        state.activeView = nextView;
         renderAll();
       });
     });
   }
 
-  function routeItems() {
+  function resolveRouteItems(actIds) {
     const items = [];
-    for (const idStr of state.favorites) {
+    for (const idStr of actIds) {
       const [dayId, stage, artist] = idStr.split("::");
       const day = FESTIVAL_DATA.days.find((d) => d.id === dayId);
       const act = day && day.acts.find((a) => a.stage === stage && a.artist === artist);
@@ -978,47 +1005,15 @@
     return items;
   }
 
-  function renderRouteView() {
-    const lang = state.lang;
+  function routeItems() {
+    return resolveRouteItems(state.favorites);
+  }
 
-    if (isGuest()) {
-      els.routeView.innerHTML = `
-        <div class="page-inner">
-          <h2>${t(lang, "routeTitle")}</h2>
-          <p class="empty-msg">${t(lang, "routeGuestMsg")}</p>
-          <button class="guest-btn" id="routeLoginBtn">${t(lang, "loginBtn")}</button>
-        </div>`;
-      document.getElementById("routeLoginBtn").addEventListener("click", handleLogout);
-      return;
-    }
-
-    const items = routeItems();
-    if (items.length === 0) {
-      els.routeView.innerHTML = `
-        <div class="page-inner">
-          <h2>${t(lang, "routeTitle")}</h2>
-          <p class="empty-msg">${t(lang, "routeEmptyMsg")}</p>
-        </div>`;
-      return;
-    }
-
-    currentRouteItems = items;
-
-    let html = `<div class="page-inner">
-      <div class="route-header">
-        <div class="route-header-text">
-          <h2>${t(lang, "routeTitle")}</h2>
-          <p class="page-subtitle">${t(lang, "routeSubtitle")}</p>
-        </div>
-        <div class="route-share-actions">
-          <button class="route-icon-btn" id="routeShareBtn" aria-label="${t(lang, "shareBtn")}" title="${t(lang, "shareBtn")}">
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L7.04 9.81A3 3 0 1 0 6 15.5c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65a2.92 2.92 0 1 0 2.92-2.92Z"/></svg>
-          </button>
-          <button class="route-icon-btn" id="routeInstagramBtn" aria-label="${t(lang, "shareInstagramBtn")}" title="${t(lang, "shareInstagramBtn")}">
-            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm0 4.8A1.8 1.8 0 1 1 12 10.2a1.8 1.8 0 0 1 0 3.6ZM7 4h6.17L15 6h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h1L9.83 4H7Zm2.83 2L8 8H7v9h10V8h-2.83L12.5 6h-2.67Z"/></svg>
-          </button>
-        </div>
-      </div>`;
+  // Shared by the owner's private Mi ruta and the public shared-route page:
+  // the day-grouped list of stops with a dotted timeline rail and, per stop,
+  // whatever comment-thread HTML the caller wants to plug in.
+  function buildRouteListHTML(items, lang, commentBlockHTML) {
+    let html = "";
     let lastDayId = null;
     let lastAct = null;
     const connectors = [];
@@ -1050,11 +1045,58 @@
             <span class="route-stage">${act.stage}</span>
           </span>
         </button>
-        <div class="route-comment" data-idx="${idx}">${routeCommentBlockHTML(idx)}</div>`;
+        <div class="route-comment" data-idx="${idx}">${commentBlockHTML(idx)}</div>`;
       lastDayId = day.id;
       lastAct = act;
     });
-    html += `</div></div>`;
+    html += `</div>`;
+    return { html, connectors, thumbs };
+  }
+
+  function renderRouteView() {
+    const lang = state.lang;
+
+    if (isGuest()) {
+      els.routeView.innerHTML = `
+        <div class="page-inner">
+          <h2>${t(lang, "routeTitle")}</h2>
+          <p class="empty-msg">${t(lang, "routeGuestMsg")}</p>
+          <button class="guest-btn" id="routeLoginBtn">${t(lang, "loginBtn")}</button>
+        </div>`;
+      document.getElementById("routeLoginBtn").addEventListener("click", handleLogout);
+      return;
+    }
+
+    const items = routeItems();
+    if (items.length === 0) {
+      els.routeView.innerHTML = `
+        <div class="page-inner">
+          <h2>${t(lang, "routeTitle")}</h2>
+          <p class="empty-msg">${t(lang, "routeEmptyMsg")}</p>
+        </div>`;
+      return;
+    }
+
+    currentRouteItems = items;
+
+    const { html: listHTML, connectors, thumbs } = buildRouteListHTML(items, lang, routeCommentBlockHTML);
+    const html = `<div class="page-inner">
+      <div class="route-header">
+        <div class="route-header-text">
+          <h2>${t(lang, "routeTitle")}</h2>
+          <p class="page-subtitle">${t(lang, "routeSubtitle")}</p>
+        </div>
+        <div class="route-share-actions">
+          <button class="route-icon-btn" id="routeShareBtn" aria-label="${t(lang, "shareBtn")}" title="${t(lang, "shareBtn")}">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L7.04 9.81A3 3 0 1 0 6 15.5c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65a2.92 2.92 0 1 0 2.92-2.92Z"/></svg>
+          </button>
+          <button class="route-icon-btn" id="routeInstagramBtn" aria-label="${t(lang, "shareInstagramBtn")}" title="${t(lang, "shareInstagramBtn")}">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm0 4.8A1.8 1.8 0 1 1 12 10.2a1.8 1.8 0 0 1 0 3.6ZM7 4h6.17L15 6h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h1L9.83 4H7Zm2.83 2L8 8H7v9h10V8h-2.83L12.5 6h-2.67Z"/></svg>
+          </button>
+        </div>
+      </div>
+      ${listHTML}
+    </div>`;
     els.routeView.innerHTML = html;
 
     els.routeView.querySelectorAll(".route-item").forEach((el) => {
@@ -1064,7 +1106,10 @@
       });
     });
 
-    items.forEach((_, idx) => wireCommentBlock(idx));
+    items.forEach((_, idx) => {
+      const container = els.routeView.querySelector(`.route-comment[data-idx="${idx}"]`);
+      if (container) wireCommentThread(container, routeCommentOps(idx));
+    });
 
     document.getElementById("routeShareBtn").addEventListener("click", async (e) => {
       const btn = e.currentTarget;
@@ -1095,92 +1140,266 @@
     thumbs.forEach(({ id, artist }) => loadArtistThumb(id, artist));
   }
 
-  // --- Personal comments on Mi ruta stops ---
+  // --- Comment threads on Mi ruta stops ---
+  //
+  // Shared between the owner's private "Mi ruta" and the public shared-route
+  // page: both render a thread of comments per stop, where anyone can add
+  // one but only its author can edit/delete it (server-enforced too).
 
-  function routeCommentBlockHTML(idx) {
-    const item = currentRouteItems[idx];
-    const lang = state.lang;
-    const comment = state.comments.get(actId(item.day, item.act));
-    if (comment) {
-      const meta = formatCommentMeta(lang, comment.updatedAt);
-      return `
-        <div class="comment-bubble">
-          <p>${escapeHtml(comment.comment)}</p>
-          <button class="comment-edit-btn" data-idx="${idx}" aria-label="${t(lang, "editCommentBtn")}">✏️</button>
-        </div>
-        ${meta ? `<div class="comment-meta">${meta}</div>` : ""}`;
-    }
-    return `<button class="comment-add-btn" data-idx="${idx}">${t(lang, "addCommentBtn")}…</button>`;
+  function commentEntryHTML(lang, c) {
+    const meta = formatCommentMeta(lang, c.createdAt, c.authorName);
+    return `
+      <div class="comment-bubble">
+        <p>${escapeHtml(c.comment)}</p>
+        ${c.mine ? `<button class="comment-edit-btn" aria-label="${t(lang, "editCommentBtn")}">✏️</button>` : ""}
+      </div>
+      ${
+        c.isNew || meta
+          ? `<div class="comment-meta-row">
+               ${c.isNew ? `<span class="comment-new-badge">${t(lang, "newCommentBadge")}</span>` : ""}
+               ${meta ? `<span class="comment-meta">${meta}</span>` : ""}
+             </div>`
+          : ""
+      }`;
   }
 
-  function wireCommentBlock(idx) {
-    const container = els.routeView.querySelector(`.route-comment[data-idx="${idx}"]`);
-    if (!container) return;
-    const btn = container.querySelector(".comment-add-btn, .comment-edit-btn");
-    if (btn) {
-      btn.addEventListener("click", (e) => {
+  function commentThreadHTML(lang, comments) {
+    const entries = (comments || [])
+      .map((c) => `<div class="comment-entry" data-comment-id="${c.id}">${commentEntryHTML(lang, c)}</div>`)
+      .join("");
+    return `${entries}<button type="button" class="comment-add-btn">${t(lang, "addCommentBtn")}…</button>`;
+  }
+
+  // ops = { getComments(), addComment(text), editComment(id, text), deleteComment(id) }
+  function wireCommentThread(container, ops) {
+    container.querySelectorAll(".comment-entry").forEach((entryEl) => {
+      const editBtn = entryEl.querySelector(".comment-edit-btn");
+      if (!editBtn) return;
+      editBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        startCommentEdit(idx);
+        const commentId = Number(entryEl.dataset.commentId);
+        const existing = (ops.getComments() || []).find((c) => c.id === commentId);
+        renderCommentForm(container, entryEl, ops, commentId, existing ? existing.comment : "");
+      });
+    });
+    const addBtn = container.querySelector(".comment-add-btn");
+    if (addBtn) {
+      addBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const entryEl = document.createElement("div");
+        entryEl.className = "comment-entry";
+        addBtn.replaceWith(entryEl);
+        renderCommentForm(container, entryEl, ops, null, "");
       });
     }
+  }
+
+  function renderCommentForm(container, entryEl, ops, commentId, currentText) {
+    const lang = state.lang;
+    const showNameField = !commentId && ops.needsAuthorName && ops.needsAuthorName();
+    entryEl.innerHTML = `
+      <form class="comment-form">
+        ${
+          showNameField
+            ? `<input type="text" class="comment-name-input" maxlength="40" placeholder="${t(lang, "commentNamePlaceholder")}" required />`
+            : ""
+        }
+        <textarea maxlength="500" placeholder="${t(lang, "commentPlaceholder")}">${escapeHtml(currentText)}</textarea>
+        <div class="comment-form-actions">
+          <button type="submit" class="comment-save-btn">${t(lang, "saveBtn")}</button>
+          <button type="button" class="comment-cancel-btn" data-action="cancel">${t(lang, "cancelBtn")}</button>
+          ${commentId ? `<button type="button" class="comment-delete-btn" data-action="delete">${t(lang, "deleteBtn")}</button>` : ""}
+        </div>
+      </form>`;
+    const form = entryEl.querySelector("form");
+    const nameInput = form.querySelector(".comment-name-input");
+    const textarea = form.querySelector("textarea");
+    (nameInput || textarea).focus();
+    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+    form.addEventListener("click", (e) => e.stopPropagation());
+    form.addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const text = textarea.value.trim();
+      if (!text) return;
+      if (nameInput) {
+        const name = nameInput.value.trim();
+        if (!name) {
+          nameInput.focus();
+          return;
+        }
+        ops.setAuthorName(name);
+      }
+      try {
+        if (commentId) await ops.editComment(commentId, text);
+        else await ops.addComment(text);
+      } catch {
+        /* best-effort; the thread just won't reflect this change */
+      }
+      ops.rerender();
+    });
+    form.querySelector('[data-action="cancel"]').addEventListener("click", () => ops.rerender());
+    const delBtn = form.querySelector('[data-action="delete"]');
+    if (delBtn) {
+      delBtn.addEventListener("click", async () => {
+        try {
+          await ops.deleteComment(commentId);
+        } catch {
+          /* best-effort */
+        }
+        ops.rerender();
+      });
+    }
+  }
+
+  function routeCommentOps(idx) {
+    const item = currentRouteItems[idx];
+    const id = actId(item.day, item.act);
+    return {
+      getComments: () => state.comments.get(id) || [],
+      addComment: async (text) => {
+        const created = await Api.addComment(id, text);
+        const list = state.comments.get(id) || [];
+        list.push(created);
+        state.comments.set(id, list);
+      },
+      editComment: async (commentId, text) => {
+        const updated = await Api.editComment(commentId, text);
+        const list = state.comments.get(id) || [];
+        const i = list.findIndex((c) => c.id === commentId);
+        if (i !== -1) list[i] = updated;
+        state.comments.set(id, list);
+      },
+      deleteComment: async (commentId) => {
+        await Api.deleteComment(commentId);
+        state.comments.set(
+          id,
+          (state.comments.get(id) || []).filter((c) => c.id !== commentId)
+        );
+      },
+      rerender: () => renderRouteCommentBlock(idx)
+    };
+  }
+
+  function routeCommentBlockHTML(idx) {
+    const ops = routeCommentOps(idx);
+    return commentThreadHTML(state.lang, ops.getComments());
   }
 
   function renderRouteCommentBlock(idx) {
     const container = els.routeView.querySelector(`.route-comment[data-idx="${idx}"]`);
     if (!container) return;
     container.innerHTML = routeCommentBlockHTML(idx);
-    wireCommentBlock(idx);
+    wireCommentThread(container, routeCommentOps(idx));
   }
 
-  function startCommentEdit(idx) {
-    const item = currentRouteItems[idx];
-    if (!item) return;
-    const container = els.routeView.querySelector(`.route-comment[data-idx="${idx}"]`);
-    if (!container) return;
-    const lang = state.lang;
-    const existing = state.comments.get(actId(item.day, item.act));
-    const current = existing ? existing.comment : "";
-    container.innerHTML = `
-      <form class="comment-form">
-        <textarea maxlength="200" placeholder="${t(lang, "commentPlaceholder")}">${escapeHtml(current)}</textarea>
-        <div class="comment-form-actions">
-          <button type="submit" class="comment-save-btn">${t(lang, "saveBtn")}</button>
-          <button type="button" class="comment-cancel-btn" data-action="cancel">${t(lang, "cancelBtn")}</button>
-          ${current ? `<button type="button" class="comment-delete-btn" data-action="delete">${t(lang, "deleteBtn")}</button>` : ""}
-        </div>
-      </form>`;
-    const form = container.querySelector("form");
-    const textarea = form.querySelector("textarea");
-    textarea.focus();
-    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
-    form.addEventListener("click", (e) => e.stopPropagation());
-    form.addEventListener("submit", (e) => {
-      e.preventDefault();
-      saveComment(idx, textarea.value);
-    });
-    form.querySelector('[data-action="cancel"]').addEventListener("click", () => renderRouteCommentBlock(idx));
-    const delBtn = form.querySelector('[data-action="delete"]');
-    if (delBtn) delBtn.addEventListener("click", () => saveComment(idx, ""));
-  }
+  // --- Public shared-route page (/ruta/:token) ---
+  //
+  // Anyone with the link can view someone else's route and comment on it as
+  // a named guest (no account) — identified by a random token kept in
+  // localStorage, which is how the server lets them edit/delete only their
+  // own comments.
 
-  async function saveComment(idx, text) {
-    const item = currentRouteItems[idx];
-    if (!item) return;
-    const id = actId(item.day, item.act);
-    const trimmed = text.trim();
-    const previous = state.comments.get(id);
-    if (trimmed) state.comments.set(id, { comment: trimmed, updatedAt: previous ? previous.updatedAt : null });
-    else state.comments.delete(id);
-    renderRouteCommentBlock(idx);
-    try {
-      const result = await Api.setComment(id, trimmed);
-      if (trimmed && result) {
-        state.comments.set(id, result);
-        renderRouteCommentBlock(idx);
-      }
-    } catch {
-      /* best-effort; the comment stays client-side even if the request fails */
+  const VISITOR_TOKEN_KEY = "norlendarioVisitorToken";
+  const VISITOR_NAME_KEY = "norlendarioVisitorName";
+
+  function getVisitorToken() {
+    let token = localStorage.getItem(VISITOR_TOKEN_KEY);
+    if (!token) {
+      token = window.crypto && crypto.randomUUID ? crypto.randomUUID() : Date.now() + "-" + Math.random().toString(36).slice(2);
+      localStorage.setItem(VISITOR_TOKEN_KEY, token);
     }
+    return token;
+  }
+
+  let sharedRoute = null; // { token, visitorToken, items, comments }
+
+  function sharedRouteCommentOps(idx) {
+    const item = sharedRoute.items[idx];
+    const id = actId(item.day, item.act);
+    const { token, visitorToken } = sharedRoute;
+    return {
+      getComments: () => sharedRoute.comments.get(id) || [],
+      needsAuthorName: () => !localStorage.getItem(VISITOR_NAME_KEY),
+      setAuthorName: (name) => localStorage.setItem(VISITOR_NAME_KEY, name),
+      addComment: async (text) => {
+        const authorName = localStorage.getItem(VISITOR_NAME_KEY) || "";
+        const created = await Api.addSharedComment(token, { actId: id, comment: text, authorName, visitorToken });
+        const list = sharedRoute.comments.get(id) || [];
+        list.push(created);
+        sharedRoute.comments.set(id, list);
+      },
+      editComment: async (commentId, text) => {
+        const updated = await Api.editSharedComment(token, commentId, { comment: text, visitorToken });
+        const list = sharedRoute.comments.get(id) || [];
+        const i = list.findIndex((c) => c.id === commentId);
+        if (i !== -1) list[i] = updated;
+        sharedRoute.comments.set(id, list);
+      },
+      deleteComment: async (commentId) => {
+        await Api.deleteSharedComment(token, commentId, visitorToken);
+        sharedRoute.comments.set(
+          id,
+          (sharedRoute.comments.get(id) || []).filter((c) => c.id !== commentId)
+        );
+      },
+      rerender: () => renderSharedRouteCommentBlock(idx)
+    };
+  }
+
+  function sharedRouteCommentBlockHTML(idx) {
+    return commentThreadHTML(state.lang, sharedRouteCommentOps(idx).getComments());
+  }
+
+  function renderSharedRouteCommentBlock(idx) {
+    const container = document.querySelector(`#sharedRouteView .route-comment[data-idx="${idx}"]`);
+    if (!container) return;
+    container.innerHTML = sharedRouteCommentBlockHTML(idx);
+    wireCommentThread(container, sharedRouteCommentOps(idx));
+  }
+
+  async function renderSharedRouteView(token) {
+    document.body.classList.add("shared-route-mode");
+    const container = document.createElement("div");
+    container.id = "sharedRouteView";
+    container.className = "shared-route-view page-view";
+    document.body.appendChild(container);
+
+    const lang = state.lang;
+    const data = await Api.getSharedRoute(token, getVisitorToken());
+    if (!data) {
+      container.innerHTML = `<div class="page-inner"><p class="empty-msg">${t(lang, "sharedRouteNotFound")}</p></div>`;
+      return;
+    }
+
+    const items = resolveRouteItems(data.favorites);
+    sharedRoute = { token, visitorToken: getVisitorToken(), items, comments: commentsMapFromObject(data.comments) };
+
+    const headerHTML = `
+      <div class="route-header-text">
+        <h2>${t(lang, "sharedRouteTitle").replace("{name}", escapeHtml(data.username))}</h2>
+        <p class="page-subtitle">${t(lang, "routeSubtitle")}</p>
+      </div>`;
+
+    if (items.length === 0) {
+      container.innerHTML = `<div class="page-inner">${headerHTML}<p class="empty-msg">${t(lang, "routeEmptyMsg")}</p></div>`;
+      return;
+    }
+
+    const { html: listHTML, connectors, thumbs } = buildRouteListHTML(items, lang, sharedRouteCommentBlockHTML);
+    container.innerHTML = `<div class="page-inner">${headerHTML}${listHTML}</div>`;
+
+    container.querySelectorAll(".route-item").forEach((el) => {
+      el.addEventListener("click", () => {
+        const { day, act } = items[Number(el.dataset.idx)];
+        openDetail(act, day);
+      });
+    });
+    items.forEach((_, idx) => {
+      const c = container.querySelector(`.route-comment[data-idx="${idx}"]`);
+      if (c) wireCommentThread(c, sharedRouteCommentOps(idx));
+    });
+    connectors.forEach(({ id, from, to }) => loadRouteConnector(id, from, to));
+    thumbs.forEach(({ id, artist }) => loadArtistThumb(id, artist));
   }
 
   async function loadRouteConnector(containerId, from, to) {
@@ -1436,6 +1655,7 @@
       state.user = data.username;
       state.favorites = new Set(await Api.getFavorites());
       state.comments = commentsMapFromObject(await Api.getComments());
+      state.hasUnreadComments = hasAnyUnreadComment(state.comments);
       state.authError = null;
       hideGate();
       renderAll();
@@ -1488,6 +1708,13 @@
 
   async function boot() {
     await loadFestivalData();
+
+    const sharedMatch = window.location.pathname.match(/^\/ruta\/([A-Za-z0-9_-]+)\/?$/);
+    if (sharedMatch) {
+      await renderSharedRouteView(sharedMatch[1]);
+      return;
+    }
+
     await loadFavCounts();
     try {
       const me = await Api.me();
@@ -1495,6 +1722,7 @@
         state.user = me.username;
         state.favorites = new Set(await Api.getFavorites());
         state.comments = commentsMapFromObject(await Api.getComments());
+        state.hasUnreadComments = hasAnyUnreadComment(state.comments);
         renderAll();
         return;
       }
@@ -1509,6 +1737,14 @@
     state.comments = new Map();
     renderAll();
   }
+
+  // Leaving the route tab, backgrounding the tab, or closing the page all
+  // count as "seen" — keepalive so the request survives the page unloading.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden" && state.activeView === "route") {
+      markCommentsReadIfNeeded();
+    }
+  });
 
   boot();
 })();

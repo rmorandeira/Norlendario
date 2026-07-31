@@ -86,6 +86,10 @@ const I18N = {
     addCommentBtn: "Añadir comentario",
     editCommentBtn: "Editar comentario",
     commentPlaceholder: "Escribe una nota sobre este concierto…",
+    commentNamePlaceholder: "Tu nombre",
+    newCommentBadge: "NEW",
+    sharedRouteTitle: "La ruta de {name}",
+    sharedRouteNotFound: "No se ha encontrado esta ruta. Puede que el enlace sea incorrecto.",
     saveBtn: "Guardar",
     deleteBtn: "Eliminar"
   },
@@ -176,6 +180,10 @@ const I18N = {
     addCommentBtn: "Add comment",
     editCommentBtn: "Edit comment",
     commentPlaceholder: "Write a note about this show…",
+    commentNamePlaceholder: "Your name",
+    newCommentBadge: "NEW",
+    sharedRouteTitle: "{name}'s route",
+    sharedRouteNotFound: "This route couldn't be found. The link may be wrong.",
     saveBtn: "Save",
     deleteBtn: "Delete"
   }

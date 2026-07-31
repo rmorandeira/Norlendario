@@ -63,13 +63,17 @@ db.exec(`
     tba INTEGER NOT NULL DEFAULT 0
   );
 
-  CREATE TABLE IF NOT EXISTS act_comments (
-    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  CREATE TABLE IF NOT EXISTS route_comments (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     act_id TEXT NOT NULL,
+    author_user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    author_name TEXT NOT NULL,
+    visitor_token TEXT,
     comment TEXT NOT NULL,
-    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-    PRIMARY KEY (user_id, act_id)
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
+  CREATE INDEX IF NOT EXISTS idx_route_comments_owner ON route_comments(owner_id);
 `);
 
 // Drop columns from an older schema version, if this DB predates the switch
@@ -79,5 +83,38 @@ if (existingColumns.includes("bio")) db.exec("ALTER TABLE artist_info DROP COLUM
 if (existingColumns.includes("wikipedia_url")) db.exec("ALTER TABLE artist_info DROP COLUMN wikipedia_url");
 if (!existingColumns.includes("image_override")) db.exec("ALTER TABLE artist_info ADD COLUMN image_override TEXT");
 if (!existingColumns.includes("description")) db.exec("ALTER TABLE artist_info ADD COLUMN description TEXT");
+
+const userColumns = db.prepare("PRAGMA table_info(users)").all().map((c) => c.name);
+if (!userColumns.includes("share_token")) {
+  db.exec("ALTER TABLE users ADD COLUMN share_token TEXT");
+}
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_share_token ON users(share_token)");
+if (!userColumns.includes("last_seen_comments_at")) {
+  db.exec("ALTER TABLE users ADD COLUMN last_seen_comments_at TEXT");
+}
+
+// One-off migration from the old single-note-per-act act_comments table to
+// the threaded route_comments table (personal notes become the owner's
+// first thread entry). Safe to run every boot — it's a no-op once the old
+// table is gone.
+const hasOldCommentsTable = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='act_comments'").get();
+if (hasOldCommentsTable) {
+  const oldRows = db
+    .prepare(
+      "SELECT ac.user_id, ac.act_id, ac.comment, ac.updated_at, u.username FROM act_comments ac JOIN users u ON u.id = ac.user_id"
+    )
+    .all();
+  const insertMigrated = db.prepare(`
+    INSERT INTO route_comments (owner_id, act_id, author_user_id, author_name, comment, created_at)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  const migrate = db.transaction((rows) => {
+    for (const r of rows) {
+      insertMigrated.run(r.user_id, r.act_id, r.user_id, r.username, r.comment, r.updated_at);
+    }
+    db.exec("DROP TABLE act_comments");
+  });
+  migrate(oldRows);
+}
 
 module.exports = db;

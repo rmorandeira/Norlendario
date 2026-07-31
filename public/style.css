@@ -663,6 +663,17 @@ body.gate-open main {
   visibility: hidden;
 }
 
+body.shared-route-mode .top,
+body.shared-route-mode #calendarView,
+body.shared-route-mode #routeView,
+body.shared-route-mode #userView,
+body.shared-route-mode .bottom-nav {
+  display: none;
+}
+.shared-route-view {
+  display: flex;
+}
+
 .gate-card {
   width: 100%;
   max-width: 360px;
@@ -817,6 +828,20 @@ body.gate-open main {
 }
 .bottom-nav-btn.active {
   color: var(--stage-1);
+}
+.bottom-nav-icon-wrap {
+  position: relative;
+  display: inline-flex;
+}
+.bottom-nav-dot {
+  position: absolute;
+  top: -2px;
+  right: -4px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #e34948;
+  border: 2px solid var(--surface);
 }
 
 .page-view {
@@ -1004,8 +1029,14 @@ body.gate-open main {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
-  gap: 4px;
+  gap: 8px;
   margin: -2px 0 12px 74px;
+}
+.comment-entry {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
 }
 .comment-bubble {
   align-self: flex-start;
@@ -1036,9 +1067,22 @@ body.gate-open main {
   cursor: pointer;
   opacity: 0.75;
 }
+.comment-meta-row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+}
 .comment-meta {
+  margin-left: auto;
   font-size: 0.72rem;
   color: var(--ink-muted);
+}
+.comment-new-badge {
+  color: #eda100;
+  font-weight: 700;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
 }
 .comment-add-btn {
   align-self: flex-end;
@@ -1057,7 +1101,8 @@ body.gate-open main {
   gap: 8px;
   max-width: 320px;
 }
-.comment-form textarea {
+.comment-form textarea,
+.comment-form .comment-name-input {
   font: inherit;
   font-size: 0.85rem;
   padding: 8px 10px;
@@ -1065,6 +1110,8 @@ body.gate-open main {
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--ink);
+}
+.comment-form textarea {
   resize: vertical;
   min-height: 44px;
 }

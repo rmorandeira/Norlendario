@@ -54,13 +54,65 @@ const Api = {
     if (!r.ok) return {};
     return r.json();
   },
-  async setComment(actId, comment) {
-    const r = await fetch("/api/comments/" + encodeURIComponent(actId), {
+  async addComment(actId, comment) {
+    const r = await fetch("/api/comments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ actId, comment })
+    });
+    if (!r.ok) throw new Error("add_comment_failed");
+    return r.json();
+  },
+  async editComment(id, comment) {
+    const r = await fetch("/api/comments/" + encodeURIComponent(id), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ comment })
     });
-    if (r.status === 204) return null;
+    if (!r.ok) throw new Error("edit_comment_failed");
     return r.json();
+  },
+  async deleteComment(id) {
+    await fetch("/api/comments/" + encodeURIComponent(id), { method: "DELETE" });
+  },
+  async markCommentsRead() {
+    await fetch("/api/comments/mark-read", { method: "POST", keepalive: true });
+  },
+  async getShareLink() {
+    const r = await fetch("/api/share-link");
+    if (!r.ok) return null;
+    return r.json();
+  },
+  async getSharedRoute(token, visitorToken) {
+    const qs = visitorToken ? "?visitorToken=" + encodeURIComponent(visitorToken) : "";
+    const r = await fetch("/api/shared/" + encodeURIComponent(token) + qs);
+    if (!r.ok) return null;
+    return r.json();
+  },
+  async addSharedComment(token, { actId, comment, authorName, visitorToken }) {
+    const r = await fetch("/api/shared/" + encodeURIComponent(token) + "/comments", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ actId, comment, authorName, visitorToken })
+    });
+    if (!r.ok) throw new Error("add_shared_comment_failed");
+    return r.json();
+  },
+  async editSharedComment(token, id, { comment, visitorToken }) {
+    const r = await fetch("/api/shared/" + encodeURIComponent(token) + "/comments/" + encodeURIComponent(id), {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ comment, visitorToken })
+    });
+    if (!r.ok) throw new Error("edit_shared_comment_failed");
+    return r.json();
+  },
+  async deleteSharedComment(token, id, visitorToken) {
+    const r = await fetch("/api/shared/" + encodeURIComponent(token) + "/comments/" + encodeURIComponent(id), {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ visitorToken })
+    });
+    return r.ok;
   }
 };

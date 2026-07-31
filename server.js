@@ -1,5 +1,6 @@
 require("dotenv").config();
 const path = require("path");
+const crypto = require("crypto");
 const express = require("express");
 const session = require("express-session");
 const bcrypt = require("bcryptjs");
@@ -46,14 +47,20 @@ const removeFavorite = db.prepare(
   "DELETE FROM favorites WHERE user_id = ? AND act_id = ?"
 );
 const deleteUser = db.prepare("DELETE FROM users WHERE id = ?");
-const listComments = db.prepare("SELECT act_id, comment, updated_at FROM act_comments WHERE user_id = ?");
-const upsertComment = db.prepare(`
-  INSERT INTO act_comments (user_id, act_id, comment, updated_at)
-  VALUES (@userId, @actId, @comment, datetime('now'))
-  ON CONFLICT(user_id, act_id) DO UPDATE SET comment = excluded.comment, updated_at = excluded.updated_at
+const getUserById = db.prepare("SELECT id, username, share_token, last_seen_comments_at FROM users WHERE id = ?");
+const setShareToken = db.prepare("UPDATE users SET share_token = ? WHERE id = ?");
+const markCommentsSeen = db.prepare("UPDATE users SET last_seen_comments_at = datetime('now') WHERE id = ?");
+const findUserByShareToken = db.prepare("SELECT id, username FROM users WHERE share_token = ?");
+const listRouteComments = db.prepare(
+  "SELECT id, act_id, author_user_id, author_name, visitor_token, comment, created_at FROM route_comments WHERE owner_id = ? ORDER BY created_at ASC"
+);
+const insertRouteComment = db.prepare(`
+  INSERT INTO route_comments (owner_id, act_id, author_user_id, author_name, visitor_token, comment)
+  VALUES (@ownerId, @actId, @authorUserId, @authorName, @visitorToken, @comment)
 `);
-const getComment = db.prepare("SELECT comment, updated_at FROM act_comments WHERE user_id = ? AND act_id = ?");
-const deleteComment = db.prepare("DELETE FROM act_comments WHERE user_id = ? AND act_id = ?");
+const getRouteCommentById = db.prepare("SELECT * FROM route_comments WHERE id = ? AND owner_id = ?");
+const updateRouteCommentText = db.prepare("UPDATE route_comments SET comment = ? WHERE id = ?");
+const deleteRouteCommentById = db.prepare("DELETE FROM route_comments WHERE id = ?");
 const listUsersStmt = db.prepare(`
   SELECT users.id, users.username, users.created_at, COUNT(favorites.id) AS favorite_count
   FROM users
@@ -76,6 +83,38 @@ function requireAdmin(req, res, next) {
     return res.status(401).json({ error: "unauthorized" });
   }
   next();
+}
+
+// A comment belongs to whoever authored it: an account holder (compared by
+// user id) or, for public-link visitors without an account, whoever holds
+// the matching client-generated visitor token.
+function canModifyRouteComment(row, viewerUserId, viewerVisitorToken) {
+  if (row.author_user_id) return row.author_user_id === viewerUserId;
+  return Boolean(viewerVisitorToken) && row.visitor_token === viewerVisitorToken;
+}
+
+// lastSeenAt is only meaningful for the owner viewing their own thread
+// (GET /api/comments) — everywhere else it's omitted and isNew stays false.
+function serializeRouteComment(row, viewerUserId, viewerVisitorToken, lastSeenAt) {
+  const mine = canModifyRouteComment(row, viewerUserId, viewerVisitorToken);
+  return {
+    id: row.id,
+    actId: row.act_id,
+    authorName: row.author_name,
+    comment: row.comment,
+    createdAt: row.created_at,
+    mine,
+    isNew: Boolean(lastSeenAt) && !mine && row.created_at > lastSeenAt
+  };
+}
+
+function serializeRouteComments(rows, viewerUserId, viewerVisitorToken, lastSeenAt) {
+  const map = {};
+  rows.forEach((row) => {
+    if (!map[row.act_id]) map[row.act_id] = [];
+    map[row.act_id].push(serializeRouteComment(row, viewerUserId, viewerVisitorToken, lastSeenAt));
+  });
+  return map;
 }
 
 // The route/artist sweeps take longer than most proxies keep a request
@@ -168,24 +207,135 @@ app.get("/api/favorites/counts", (req, res) => {
   res.json(map);
 });
 
+// --- Comment threads on Mi ruta stops (own route, authenticated) ---
+
 app.get("/api/comments", requireAuth, (req, res) => {
-  const rows = listComments.all(req.session.userId);
-  const map = {};
-  rows.forEach((r) => {
-    map[r.act_id] = { comment: r.comment, updatedAt: r.updated_at };
-  });
-  res.json(map);
+  const user = getUserById.get(req.session.userId);
+  const lastSeen = user.last_seen_comments_at || "0000-00-00 00:00:00";
+  const rows = listRouteComments.all(req.session.userId);
+  res.json(serializeRouteComments(rows, req.session.userId, null, lastSeen));
 });
 
-app.put("/api/comments/:actId", requireAuth, (req, res) => {
-  const comment = String(req.body.comment || "").trim();
-  if (!comment) {
-    deleteComment.run(req.session.userId, req.params.actId);
-    return res.status(204).end();
+app.post("/api/comments", requireAuth, (req, res) => {
+  const actId = String(req.body.actId || "");
+  const comment = String(req.body.comment || "").trim().slice(0, 500);
+  if (!actId || !comment) return res.status(400).json({ error: "act_id_and_comment_required" });
+  const info = insertRouteComment.run({
+    ownerId: req.session.userId,
+    actId,
+    authorUserId: req.session.userId,
+    authorName: req.session.username,
+    visitorToken: null,
+    comment
+  });
+  const row = getRouteCommentById.get(info.lastInsertRowid, req.session.userId);
+  res.status(201).json(serializeRouteComment(row, req.session.userId, null));
+});
+
+app.put("/api/comments/:id", requireAuth, (req, res) => {
+  const row = getRouteCommentById.get(req.params.id, req.session.userId);
+  if (!row || !canModifyRouteComment(row, req.session.userId, null)) {
+    return res.status(404).json({ error: "not_found" });
   }
-  upsertComment.run({ userId: req.session.userId, actId: req.params.actId, comment });
-  const row = getComment.get(req.session.userId, req.params.actId);
-  res.json({ comment: row.comment, updatedAt: row.updated_at });
+  const comment = String(req.body.comment || "").trim().slice(0, 500);
+  if (!comment) return res.status(400).json({ error: "comment_required" });
+  updateRouteCommentText.run(comment, row.id);
+  res.json(serializeRouteComment({ ...row, comment }, req.session.userId, null));
+});
+
+app.delete("/api/comments/:id", requireAuth, (req, res) => {
+  const row = getRouteCommentById.get(req.params.id, req.session.userId);
+  if (!row || !canModifyRouteComment(row, req.session.userId, null)) {
+    return res.status(404).json({ error: "not_found" });
+  }
+  deleteRouteCommentById.run(row.id);
+  res.status(204).end();
+});
+
+app.post("/api/comments/mark-read", requireAuth, (req, res) => {
+  markCommentsSeen.run(req.session.userId);
+  res.status(204).end();
+});
+
+// --- Sharing a route publicly: anyone with the link can view it and add
+// their own comments, but can only edit/delete comments they authored ---
+
+app.get("/api/share-link", requireAuth, (req, res) => {
+  const user = getUserById.get(req.session.userId);
+  let token = user.share_token;
+  if (!token) {
+    token = crypto.randomBytes(9).toString("base64url");
+    setShareToken.run(token, req.session.userId);
+  }
+  res.json({ token });
+});
+
+app.get("/api/shared/:token", (req, res) => {
+  const owner = findUserByShareToken.get(req.params.token);
+  if (!owner) return res.status(404).json({ error: "not_found" });
+  const favorites = listFavorites.all(owner.id).map((r) => r.act_id);
+  const rows = listRouteComments.all(owner.id);
+  const visitorToken = String(req.query.visitorToken || "");
+  res.json({
+    username: owner.username,
+    favorites,
+    comments: serializeRouteComments(rows, req.session.userId || null, visitorToken)
+  });
+});
+
+app.post("/api/shared/:token/comments", (req, res) => {
+  const owner = findUserByShareToken.get(req.params.token);
+  if (!owner) return res.status(404).json({ error: "not_found" });
+
+  const actId = String(req.body.actId || "");
+  const comment = String(req.body.comment || "").trim().slice(0, 500);
+  if (!actId || !comment) return res.status(400).json({ error: "act_id_and_comment_required" });
+
+  let authorUserId = null;
+  let authorName;
+  let visitorToken = null;
+  if (req.session.userId === owner.id) {
+    authorUserId = owner.id;
+    authorName = req.session.username;
+  } else {
+    authorName = String(req.body.authorName || "").trim().slice(0, 40);
+    visitorToken = String(req.body.visitorToken || "").trim();
+    if (!authorName || !visitorToken) {
+      return res.status(400).json({ error: "name_and_visitor_token_required" });
+    }
+  }
+
+  const info = insertRouteComment.run({ ownerId: owner.id, actId, authorUserId, authorName, visitorToken, comment });
+  const row = getRouteCommentById.get(info.lastInsertRowid, owner.id);
+  res.status(201).json(serializeRouteComment(row, req.session.userId || null, visitorToken));
+});
+
+app.put("/api/shared/:token/comments/:id", (req, res) => {
+  const owner = findUserByShareToken.get(req.params.token);
+  if (!owner) return res.status(404).json({ error: "not_found" });
+  const row = getRouteCommentById.get(req.params.id, owner.id);
+  if (!row) return res.status(404).json({ error: "not_found" });
+  const visitorToken = String(req.body.visitorToken || "");
+  if (!canModifyRouteComment(row, req.session.userId || null, visitorToken)) {
+    return res.status(403).json({ error: "forbidden" });
+  }
+  const comment = String(req.body.comment || "").trim().slice(0, 500);
+  if (!comment) return res.status(400).json({ error: "comment_required" });
+  updateRouteCommentText.run(comment, row.id);
+  res.json(serializeRouteComment({ ...row, comment }, req.session.userId || null, visitorToken));
+});
+
+app.delete("/api/shared/:token/comments/:id", (req, res) => {
+  const owner = findUserByShareToken.get(req.params.token);
+  if (!owner) return res.status(404).json({ error: "not_found" });
+  const row = getRouteCommentById.get(req.params.id, owner.id);
+  if (!row) return res.status(404).json({ error: "not_found" });
+  const visitorToken = String(req.body.visitorToken || "");
+  if (!canModifyRouteComment(row, req.session.userId || null, visitorToken)) {
+    return res.status(403).json({ error: "forbidden" });
+  }
+  deleteRouteCommentById.run(row.id);
+  res.status(204).end();
 });
 
 app.get("/api/artist-info", async (req, res) => {
@@ -353,6 +503,12 @@ app.put("/api/admin/acts/:id", requireAdmin, (req, res) => {
 app.delete("/api/admin/acts/:id", requireAdmin, (req, res) => {
   schedule.deleteAct(req.params.id);
   res.status(204).end();
+});
+
+// Client-rendered page for a publicly shared route — same SPA shell, the
+// client reads the token out of the URL itself.
+app.get("/ruta/:token", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 app.use(express.static(path.join(__dirname, "public")));
