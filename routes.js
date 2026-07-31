@@ -2,8 +2,14 @@ const db = require("./db");
 
 // Geocoded once via OpenStreetMap Nominatim — these venues never move, so
 // there's no reason to geocode them again on every boot.
+//
+// Azcárraga's point is nudged ~95m north-west from the plaza's own Nominatim
+// centroid: OSRM's foot-routing graph has no nearby entry point from that
+// centroid (nearest reachable node was 188m away, through a tunnel, giving
+// physically impossible routes to nearby stages), while this point snaps
+// consistently ~95m to a real connected path in every direction.
 const STAGE_COORDS = {
-  "Azcárraga": { lat: 43.3698456, lng: -8.3931007 },
+  "Azcárraga": { lat: 43.370654, lng: -8.393472 },
   "Campo da Leña": { lat: 43.3730877, lng: -8.3967175 },
   "Santa Margarida": { lat: 43.3611023, lng: -8.4135179 },
   "Castelo de Santo Antón": { lat: 43.3656897, lng: -8.3875228 },
