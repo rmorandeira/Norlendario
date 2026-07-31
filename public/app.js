@@ -2007,6 +2007,8 @@
           <p class="gate-switch-mode"><button type="button" class="gate-switch-link" id="backToLoginBtn">${t(lang, "goToLoginBtn")}</button></p>`;
     } else {
       bodyHTML = `
+        <div class="google-btn-container" id="${isSignup ? "googleSignupBtn" : "googleLoginBtn"}"></div>
+        <div class="gate-divider"><span>${t(lang, "orDivider")}</span></div>
         <form id="authForm" novalidate>
           <label>${t(lang, "nameFieldLabel")}
             <input type="text" name="username" autocomplete="username" required minlength="3" maxlength="32" />
@@ -2051,11 +2053,8 @@
                    <input type="checkbox" id="privacyConsentCheckbox" />
                    <span>${t(lang, "privacyConsentLabel").replace("{link}", `<button type="button" class="gate-switch-link" id="openPrivacyPolicyBtn">${t(lang, "privacyPolicyLink")}</button>`)}</span>
                  </label>
-               </div>
-               <div class="google-btn-container" id="googleSignupBtn"></div>`
-            : `<div class="gate-divider"><span>${t(lang, "orDivider")}</span></div>
-               <div class="google-btn-container" id="googleLoginBtn"></div>
-               <button class="guest-btn" id="guestBtn">${t(lang, "guestBtn")}</button>
+               </div>`
+            : `<button class="guest-btn" id="guestBtn">${t(lang, "guestBtn")}</button>
                <p class="gate-switch-mode">${t(lang, "noAccountPrompt")} <button type="button" class="gate-switch-link" id="switchToSignupBtn">${t(lang, "createAccountLink")}</button></p>`
         }`;
     }
@@ -2168,9 +2167,9 @@
   }
 
   // --- Sign in with Google ---
-  // intent "login" only ever signs into an existing (or email-matched)
-  // account; intent "signup" can create one, gated by the same consent
-  // checkbox as the regular signup form.
+  // Both intents can create an account on first use; intent "signup" gates
+  // that on the same consent checkbox as the regular signup form, while
+  // intent "login" creates it implicitly since that screen has no checkbox.
 
   async function afterAuthSuccess(username) {
     state.user = username;
@@ -2194,7 +2193,7 @@
       const data = await Api.googleAuth(response.credential, intent, intent === "signup");
       await afterAuthSuccess(data.username);
     } catch (err) {
-      state.authError = err.message === "no_account" ? t(state.lang, "googleNoAccount") : authErrorMessage(err);
+      state.authError = authErrorMessage(err);
       renderGate();
     }
   }

@@ -248,10 +248,9 @@ app.post("/api/auth/signup", (req, res) => {
 
 // "Sign in with Google": the client verifies nothing itself, it just hands
 // us the ID token Google issued; we verify the signature against Google's
-// own keys. intent "login" only signs into an existing (or email-matched)
-// account — it never creates one, since that would skip the consent
-// checkbox. intent "signup" requires acceptedPrivacyPolicy and creates an
-// account on first use.
+// own keys. Both intents create an account on first use if none exists yet
+// (or one matching the Google email) — intent "signup" additionally requires
+// acceptedPrivacyPolicy, since that flow shows the consent checkbox.
 app.post("/api/auth/google", async (req, res) => {
   let payload;
   try {
@@ -274,10 +273,7 @@ app.post("/api/auth/google", async (req, res) => {
   }
 
   if (!user) {
-    if (req.body.intent !== "signup") {
-      return res.status(404).json({ error: "no_account" });
-    }
-    if (!req.body.acceptedPrivacyPolicy) {
+    if (req.body.intent === "signup" && !req.body.acceptedPrivacyPolicy) {
       return res.status(400).json({ error: "privacy_policy_required" });
     }
     const base = usernameBaseFromGoogleProfile(email, payload.name);
