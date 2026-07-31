@@ -21,6 +21,18 @@
     "O Portiño": "#9085e9"
   };
 
+  // Some stage names in data.js are short internal identifiers (also used
+  // in act_ids for favorites/comments — never rename those) that don't
+  // match the venue's real, official name. This maps to what's actually
+  // shown to people.
+  const STAGE_DISPLAY_NAMES = {
+    "Azcárraga": "Plaza de Azcárraga"
+  };
+
+  function stageDisplayName(stage) {
+    return STAGE_DISPLAY_NAMES[stage] || stage;
+  }
+
   const DEFAULT_DURATION = 60; // minutes, used for the last act on a stage each day
   const MAX_DURATION = 90; // minutes, cap when the next act starts later than this
   const MIN_DURATION = 30; // minutes, floor so a block always stays readable
@@ -236,7 +248,7 @@
   }
 
   function mapsUrl(stage) {
-    return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(stage + ", A Coruña, España");
+    return "https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent(stageDisplayName(stage) + ", A Coruña, España");
   }
 
   function stagesWithActs(day) {
@@ -386,7 +398,7 @@
 
       const label = document.createElement("div");
       label.className = "stage-label";
-      label.innerHTML = `<i style="background:var(${STAGE_COLOR_VARS[stage]})"></i><span>${stage}</span>`;
+      label.innerHTML = `<i style="background:var(${STAGE_COLOR_VARS[stage]})"></i><span>${stageDisplayName(stage)}</span>`;
       row.appendChild(label);
 
       const track = document.createElement("div");
@@ -460,7 +472,7 @@
       chip.tabIndex = 0;
       chip.setAttribute("role", "button");
       chip.style.setProperty("--stage-color", `var(${STAGE_COLOR_VARS[act.stage]})`);
-      chip.innerHTML = `<i style="background:var(${STAGE_COLOR_VARS[act.stage]})"></i>${act.artist} <span class="tba-stage">· ${act.stage}</span>`;
+      chip.innerHTML = `<i style="background:var(${STAGE_COLOR_VARS[act.stage]})"></i>${act.artist} <span class="tba-stage">· ${stageDisplayName(act.stage)}</span>`;
       if (!isGuest()) chip.appendChild(starButton(day, act));
       chip.addEventListener("click", () => openDetail(act, day));
       chip.addEventListener("keydown", (e) => {
@@ -557,7 +569,7 @@
               <span class="event-date">${formatDayDate(lang, day)}</span>
               <div class="event-venue-col">
                 <a class="event-venue" href="${mapsUrl(act.stage)}" target="_blank" rel="noopener noreferrer">
-                  <i style="background:var(${STAGE_COLOR_VARS[act.stage]})"></i>${act.stage}
+                  <i style="background:var(${STAGE_COLOR_VARS[act.stage]})"></i>${stageDisplayName(act.stage)}
                 </a>
                 ${
                   favCount > 0
@@ -722,7 +734,7 @@
         lines.push(formatDayDate(lang, day).toUpperCase());
         lastDayId = day.id;
       }
-      lines.push(`• ${formatTimeForDisplay(lang, act)} — ${act.artist} (${act.stage})`);
+      lines.push(`• ${formatTimeForDisplay(lang, act)} — ${act.artist} (${stageDisplayName(act.stage)})`);
       const myComment = (state.comments.get(actId(day, act)) || []).find((c) => c.mine);
       if (myComment) lines.push(`   💬 "${myComment.comment}"`);
     });
@@ -885,7 +897,7 @@
     ctx.fillText(featured.artist, heroCx, heroY + heroSize + 56);
     ctx.fillStyle = "#c3c2b7";
     ctx.font = "500 28px system-ui, sans-serif";
-    ctx.fillText(`${formatTimeForDisplay(lang, featured)} · ${featured.stage}`, heroCx, heroY + heroSize + 96);
+    ctx.fillText(`${formatTimeForDisplay(lang, featured)} · ${stageDisplayName(featured.stage)}`, heroCx, heroY + heroSize + 96);
     ctx.fillStyle = "#898781";
     ctx.font = "500 24px system-ui, sans-serif";
     ctx.fillText(t(lang, "storyMusicHint"), heroCx, heroY + heroSize + 138);
@@ -988,7 +1000,7 @@
       ctx.fillText(act.artist, textX, y + 30);
       ctx.fillStyle = "#c3c2b7";
       ctx.font = "500 22px system-ui, sans-serif";
-      ctx.fillText(`${formatTimeForDisplay(lang, act)} · ${act.stage}`, textX, y + 58);
+      ctx.fillText(`${formatTimeForDisplay(lang, act)} · ${stageDisplayName(act.stage)}`, textX, y + 58);
 
       y += rowHeight;
 
@@ -1124,7 +1136,7 @@
               ${duration ? `<span class="route-duration">· ${t(lang, "routeDurationMin").replace("{min}", duration)}</span>` : ""}
             </span>
             <span class="route-artist">${act.artist}</span>
-            <span class="route-stage">${act.stage}</span>
+            <span class="route-stage">${stageDisplayName(act.stage)}</span>
           </span>
         </button>
         <div class="route-comment" data-idx="${idx}">${commentBlockHTML(idx)}</div>`;

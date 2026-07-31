@@ -26,9 +26,17 @@ function pairKey(a, b) {
   return [a, b].sort().join("::");
 }
 
+// A couple of stage names in data.js are short internal identifiers
+// (also used in act_ids for favorites/comments — never rename those)
+// that Google Maps doesn't resolve reliably on their own. Keep in sync
+// with STAGE_DISPLAY_NAMES in public/app.js.
+const STAGE_DISPLAY_NAMES = {
+  "Azcárraga": "Plaza de Azcárraga"
+};
+
 function directionsUrl(fromStage, toStage) {
-  const origin = encodeURIComponent(fromStage + ", A Coruña, España");
-  const destination = encodeURIComponent(toStage + ", A Coruña, España");
+  const origin = encodeURIComponent((STAGE_DISPLAY_NAMES[fromStage] || fromStage) + ", A Coruña, España");
+  const destination = encodeURIComponent((STAGE_DISPLAY_NAMES[toStage] || toStage) + ", A Coruña, España");
   return `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=walking`;
 }
 
@@ -69,11 +77,21 @@ async function fetchAndStoreRoute(fromStage, toStage) {
 // Reads-only from stage_routes. A cache miss still returns a working
 // Google Maps directions link — it just won't have a minutes estimate or
 // a map preview until scripts/sweep-routes.js has run.
+//
+// The cache is keyed by the unordered pair (pairKey sorts the two stage
+// names), so the same row serves both directions — but its geometry was
+// only ever walked one way when it was swept. If the caller wants the
+// other direction, the coordinate order has to be flipped or the origin
+// (green marker) and destination (red marker) end up swapped on the map.
 function getRoute(fromStage, toStage) {
   const row = getCached.get(pairKey(fromStage, toStage));
+  let geometry = row ? JSON.parse(row.geometry) : null;
+  if (geometry && row.from_stage !== fromStage) {
+    geometry = geometry.slice().reverse();
+  }
   return {
     minutes: row ? row.minutes : null,
-    geometry: row ? JSON.parse(row.geometry) : null,
+    geometry,
     directionsUrl: directionsUrl(fromStage, toStage)
   };
 }
