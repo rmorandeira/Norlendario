@@ -78,6 +78,29 @@ const Api = {
   async markCommentsRead() {
     await fetch("/api/comments/mark-read", { method: "POST", keepalive: true });
   },
+  async getProfile() {
+    const r = await fetch("/api/profile");
+    if (!r.ok) return null;
+    return r.json();
+  },
+  async updateProfile(firstName, lastName) {
+    const r = await fetch("/api/profile", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ firstName, lastName })
+    });
+    if (!r.ok) throw new Error("update_profile_failed");
+    return r.json();
+  },
+  async uploadAvatar(imageDataUrl) {
+    const r = await fetch("/api/profile/avatar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ imageDataUrl })
+    });
+    if (!r.ok) throw new Error("upload_avatar_failed");
+    return r.json();
+  },
   async getShareLink() {
     const r = await fetch("/api/share-link");
     if (!r.ok) return null;

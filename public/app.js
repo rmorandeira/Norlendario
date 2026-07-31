@@ -43,6 +43,7 @@
     favCounts: new Map(), // actId -> public aggregate favorite count, visible to guests too
     comments: new Map(), // actId -> comment thread (array), account-only like favorites
     hasUnreadComments: false, // someone else commented on my route since I last left the tab
+    profile: { firstName: "", lastName: "", avatarPath: null },
     favoritesOnly: false,
     authMode: "login", // "login" | "signup"
     authError: null,
@@ -98,6 +99,31 @@
     const div = document.createElement("div");
     div.textContent = str;
     return div.innerHTML;
+  }
+
+  // Downscales a picked/captured photo client-side before upload — keeps
+  // avatar payloads small regardless of the source camera's resolution.
+  function resizeImageToDataUrl(file, maxSize) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          const scale = Math.min(1, maxSize / Math.max(img.width, img.height));
+          const w = Math.round(img.width * scale);
+          const h = Math.round(img.height * scale);
+          const canvas = document.createElement("canvas");
+          canvas.width = w;
+          canvas.height = h;
+          canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+          resolve(canvas.toDataURL("image/jpeg", 0.85));
+        };
+        img.onerror = reject;
+        img.src = reader.result;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
   }
 
   function commentsMapFromObject(obj) {
@@ -1472,6 +1498,25 @@
           guest
             ? ""
             : `
+        <div class="profile-avatar-row">
+          <button type="button" class="avatar-btn" id="avatarBtn" aria-label="${t(lang, "changePhotoLabel")}">
+            ${
+              state.profile.avatarPath
+                ? `<img src="${state.profile.avatarPath}" alt="" />`
+                : `<span class="avatar-placeholder">${escapeHtml((state.profile.firstName || state.user || "?")[0].toUpperCase())}</span>`
+            }
+            <span class="avatar-edit-badge">📷</span>
+          </button>
+          <input type="file" accept="image/*" capture="environment" id="avatarFileInput" hidden />
+        </div>
+        <div class="settings-row">
+          <span>${t(lang, "firstNameLabel")}</span>
+          <input type="text" class="settings-input" id="firstNameInput" maxlength="60" placeholder="${t(lang, "firstNameLabel")}" value="${escapeHtml(state.profile.firstName || "")}" />
+        </div>
+        <div class="settings-row">
+          <span>${t(lang, "lastNameLabel")}</span>
+          <input type="text" class="settings-input" id="lastNameInput" maxlength="60" placeholder="${t(lang, "lastNameLabel")}" value="${escapeHtml(state.profile.lastName || "")}" />
+        </div>
         <div class="settings-row">
           <span>${t(lang, "usernameLabel")}</span>
           <span class="settings-value">${state.user}</span>
@@ -1549,6 +1594,38 @@
           renderUserView();
         });
       }
+
+      const firstNameInput = document.getElementById("firstNameInput");
+      const lastNameInput = document.getElementById("lastNameInput");
+      const saveProfileNames = async () => {
+        const firstName = firstNameInput.value.trim();
+        const lastName = lastNameInput.value.trim();
+        if (firstName === state.profile.firstName && lastName === state.profile.lastName) return;
+        state.profile.firstName = firstName;
+        state.profile.lastName = lastName;
+        try {
+          await Api.updateProfile(firstName, lastName);
+        } catch {
+          /* best-effort; the fields keep their edited value client-side either way */
+        }
+      };
+      firstNameInput.addEventListener("blur", saveProfileNames);
+      lastNameInput.addEventListener("blur", saveProfileNames);
+
+      const avatarFileInput = document.getElementById("avatarFileInput");
+      document.getElementById("avatarBtn").addEventListener("click", () => avatarFileInput.click());
+      avatarFileInput.addEventListener("change", async () => {
+        const file = avatarFileInput.files[0];
+        if (!file) return;
+        try {
+          const dataUrl = await resizeImageToDataUrl(file, 480);
+          const { avatarPath } = await Api.uploadAvatar(dataUrl);
+          state.profile.avatarPath = avatarPath;
+        } catch {
+          /* best-effort; keep the previous avatar on failure */
+        }
+        renderUserView();
+      });
     }
   }
 
@@ -1656,6 +1733,7 @@
       state.favorites = new Set(await Api.getFavorites());
       state.comments = commentsMapFromObject(await Api.getComments());
       state.hasUnreadComments = hasAnyUnreadComment(state.comments);
+      state.profile = (await Api.getProfile()) || state.profile;
       state.authError = null;
       hideGate();
       renderAll();
@@ -1723,6 +1801,7 @@
         state.favorites = new Set(await Api.getFavorites());
         state.comments = commentsMapFromObject(await Api.getComments());
         state.hasUnreadComments = hasAnyUnreadComment(state.comments);
+        state.profile = (await Api.getProfile()) || state.profile;
         renderAll();
         return;
       }

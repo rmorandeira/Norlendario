@@ -1,4 +1,5 @@
 node_modules/
+public/uploads/
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal

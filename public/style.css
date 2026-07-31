@@ -886,6 +886,72 @@ body.shared-route-mode .bottom-nav {
   font-weight: 400;
   letter-spacing: 1px;
 }
+.settings-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: none;
+  background: none;
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: right;
+}
+.settings-input::placeholder {
+  color: var(--ink-muted);
+  font-weight: 400;
+}
+.settings-input:focus {
+  outline: none;
+}
+
+.profile-avatar-row {
+  display: flex;
+  justify-content: center;
+  padding: 12px 0 20px;
+}
+.avatar-btn {
+  position: relative;
+  width: 88px;
+  height: 88px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  background: var(--gridline);
+}
+.avatar-btn img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+.avatar-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+.avatar-edit-badge {
+  position: absolute;
+  bottom: -2px;
+  right: -2px;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--surface);
+  border: 2px solid var(--page);
+  font-size: 0.9rem;
+}
 
 .mode-switch {
   flex: 0 0 auto;

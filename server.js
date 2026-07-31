@@ -1,5 +1,6 @@
 require("dotenv").config();
 const path = require("path");
+const fs = require("fs");
 const crypto = require("crypto");
 const express = require("express");
 const session = require("express-session");
@@ -13,7 +14,12 @@ const FESTIVAL_DATA = require("./public/data.js");
 const app = express();
 app.set("trust proxy", 1); // Railway sits behind a TLS-terminating proxy
 
-app.use(express.json());
+const avatarsDir = path.join(__dirname, "public", "uploads", "avatars");
+fs.mkdirSync(avatarsDir, { recursive: true });
+
+// Bumped from the 100kb default so a resized avatar photo (sent as a data
+// URL) fits — everything else on this API is tiny JSON.
+app.use(express.json({ limit: "2mb" }));
 app.use(
   session({
     secret: process.env.SESSION_SECRET || "dev-secret-change-me",
@@ -47,7 +53,11 @@ const removeFavorite = db.prepare(
   "DELETE FROM favorites WHERE user_id = ? AND act_id = ?"
 );
 const deleteUser = db.prepare("DELETE FROM users WHERE id = ?");
-const getUserById = db.prepare("SELECT id, username, share_token, last_seen_comments_at FROM users WHERE id = ?");
+const getUserById = db.prepare(
+  "SELECT id, username, share_token, last_seen_comments_at, first_name, last_name, avatar_path FROM users WHERE id = ?"
+);
+const updateProfile = db.prepare("UPDATE users SET first_name = ?, last_name = ? WHERE id = ?");
+const updateAvatarPath = db.prepare("UPDATE users SET avatar_path = ? WHERE id = ?");
 const setShareToken = db.prepare("UPDATE users SET share_token = ? WHERE id = ?");
 const markCommentsSeen = db.prepare("UPDATE users SET last_seen_comments_at = datetime('now') WHERE id = ?");
 const findUserByShareToken = db.prepare("SELECT id, username FROM users WHERE share_token = ?");
@@ -175,8 +185,51 @@ app.get("/api/auth/me", (req, res) => {
 });
 
 app.delete("/api/auth/account", requireAuth, (req, res) => {
+  const user = getUserById.get(req.session.userId);
+  if (user.avatar_path) {
+    fs.unlink(path.join(__dirname, "public", user.avatar_path.replace(/^\//, "")), () => {});
+  }
   deleteUser.run(req.session.userId); // favorites cascade via the FK
   req.session.destroy(() => res.status(204).end());
+});
+
+function serializeProfile(user) {
+  return {
+    username: user.username,
+    firstName: user.first_name || "",
+    lastName: user.last_name || "",
+    avatarPath: user.avatar_path || null
+  };
+}
+
+app.get("/api/profile", requireAuth, (req, res) => {
+  res.json(serializeProfile(getUserById.get(req.session.userId)));
+});
+
+app.put("/api/profile", requireAuth, (req, res) => {
+  const firstName = String(req.body.firstName || "").trim().slice(0, 60);
+  const lastName = String(req.body.lastName || "").trim().slice(0, 60);
+  updateProfile.run(firstName, lastName, req.session.userId);
+  res.json({ firstName, lastName });
+});
+
+app.post("/api/profile/avatar", requireAuth, (req, res) => {
+  const dataUrl = String(req.body.imageDataUrl || "");
+  const match = dataUrl.match(/^data:image\/(png|jpe?g|webp);base64,([a-zA-Z0-9+/=]+)$/);
+  if (!match) return res.status(400).json({ error: "invalid_image" });
+  const buffer = Buffer.from(match[2], "base64");
+  if (buffer.length > 3 * 1024 * 1024) return res.status(413).json({ error: "image_too_large" });
+
+  const user = getUserById.get(req.session.userId);
+  if (user.avatar_path) {
+    fs.unlink(path.join(__dirname, "public", user.avatar_path.replace(/^\//, "")), () => {});
+  }
+  const ext = match[1] === "jpg" ? "jpeg" : match[1];
+  const fileName = `${req.session.userId}-${Date.now()}.${ext}`;
+  fs.writeFileSync(path.join(avatarsDir, fileName), buffer);
+  const avatarPath = "/uploads/avatars/" + fileName;
+  updateAvatarPath.run(avatarPath, req.session.userId);
+  res.json({ avatarPath });
 });
 
 app.get("/api/favorites", requireAuth, (req, res) => {

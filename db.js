@@ -92,6 +92,15 @@ db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_share_token ON users(share_
 if (!userColumns.includes("last_seen_comments_at")) {
   db.exec("ALTER TABLE users ADD COLUMN last_seen_comments_at TEXT");
 }
+if (!userColumns.includes("first_name")) {
+  db.exec("ALTER TABLE users ADD COLUMN first_name TEXT");
+}
+if (!userColumns.includes("last_name")) {
+  db.exec("ALTER TABLE users ADD COLUMN last_name TEXT");
+}
+if (!userColumns.includes("avatar_path")) {
+  db.exec("ALTER TABLE users ADD COLUMN avatar_path TEXT");
+}
 
 // One-off migration from the old single-note-per-act act_comments table to
 // the threaded route_comments table (personal notes become the owner's
