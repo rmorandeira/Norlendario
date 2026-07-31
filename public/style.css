@@ -852,32 +852,31 @@ body.gate-open main {
   letter-spacing: 1px;
 }
 
-.toggle-switch {
-  position: relative;
+.mode-switch {
   flex: 0 0 auto;
-  width: 46px;
-  height: 26px;
-  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px;
+  padding-left: 14px;
   border: none;
   border-radius: 999px;
   background: var(--gridline);
+  color: var(--ink);
+  font: inherit;
   cursor: pointer;
 }
-.toggle-switch .toggle-knob {
-  position: absolute;
-  top: 3px;
-  left: 3px;
-  width: 20px;
-  height: 20px;
+.mode-switch-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+.mode-switch-dot {
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  background: #fff;
-  transition: transform 0.15s ease;
-}
-.toggle-switch.is-on {
   background: #35c759;
-}
-.toggle-switch.is-on .toggle-knob {
-  transform: translateX(20px);
 }
 
 .about-block {

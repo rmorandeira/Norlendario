@@ -1257,14 +1257,16 @@
 
         <div class="settings-row">
           <span>${t(lang, "languageLabel")}</span>
-          <button class="toggle-switch${isEn ? " is-on" : ""}" id="langToggleBtn" role="switch" aria-checked="${isEn}" aria-label="${t(lang, "languageLabel")}">
-            <span class="toggle-knob"></span>
+          <button class="mode-switch" id="langToggleBtn" role="switch" aria-checked="${isEn}" aria-label="${t(lang, "languageLabel")}">
+            <span class="mode-switch-label">${isEn ? "EN" : "ES"}</span>
+            <span class="mode-switch-dot"></span>
           </button>
         </div>
         <div class="settings-row">
           <span>${t(lang, "themeLabel")}</span>
-          <button class="toggle-switch${isDark ? " is-on" : ""}" id="themeToggleBtn" role="switch" aria-checked="${isDark}" aria-label="${t(lang, "themeLabel")}">
-            <span class="toggle-knob"></span>
+          <button class="mode-switch" id="themeToggleBtn" role="switch" aria-checked="${isDark}" aria-label="${t(lang, "themeLabel")}">
+            <span class="mode-switch-label">${isDark ? "🌙" : "☀️"}</span>
+            <span class="mode-switch-dot"></span>
           </button>
         </div>
 
