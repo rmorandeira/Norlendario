@@ -21,7 +21,7 @@
 
   --accent-cyan: #17c3ce;
 
-  --hour-width: 68px;
+  --hour-width: 75px;
   --row-height: 64px;
   --label-width: 108px;
   --bottom-nav-height: 60px;
@@ -1538,7 +1538,7 @@ body.shared-route-mode .bottom-nav {
 
 @media (min-width: 620px) {
   :root {
-    --hour-width: 96px;
+    --hour-width: 106px;
     --row-height: 72px;
     --label-width: 150px;
   }
@@ -1572,6 +1572,6 @@ body.shared-route-mode .bottom-nav {
 
 @media (min-width: 1000px) {
   :root {
-    --hour-width: 130px;
+    --hour-width: 143px;
   }
 }
