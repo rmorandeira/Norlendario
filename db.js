@@ -108,6 +108,26 @@ if (!userColumns.includes("last_name")) {
 if (!userColumns.includes("avatar_path")) {
   db.exec("ALTER TABLE users ADD COLUMN avatar_path TEXT");
 }
+if (!userColumns.includes("email")) {
+  db.exec("ALTER TABLE users ADD COLUMN email TEXT");
+}
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)");
+if (!userColumns.includes("consent_ip")) {
+  db.exec("ALTER TABLE users ADD COLUMN consent_ip TEXT");
+}
+if (!userColumns.includes("consent_user_agent")) {
+  db.exec("ALTER TABLE users ADD COLUMN consent_user_agent TEXT");
+}
+if (!userColumns.includes("consent_policy_version")) {
+  db.exec("ALTER TABLE users ADD COLUMN consent_policy_version TEXT");
+}
+if (!userColumns.includes("reset_token")) {
+  db.exec("ALTER TABLE users ADD COLUMN reset_token TEXT");
+}
+if (!userColumns.includes("reset_token_expires_at")) {
+  db.exec("ALTER TABLE users ADD COLUMN reset_token_expires_at TEXT");
+}
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_reset_token ON users(reset_token)");
 
 // One-off migration from the old single-note-per-act act_comments table to
 // the threaded route_comments table (personal notes become the owner's

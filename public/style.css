@@ -471,6 +471,34 @@ body.detail-open .artist-view {
   margin: 0 auto;
 }
 
+.legal-view {
+  z-index: 70; /* above the auth gate (60), so it also works from signup */
+}
+body.legal-open .legal-view {
+  transform: translateX(0);
+}
+.legal-view h2 {
+  margin: 0 0 4px;
+}
+.legal-intro {
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+  margin: 0 0 22px;
+}
+.legal-section {
+  margin-bottom: 18px;
+}
+.legal-section h3 {
+  font-size: 0.95rem;
+  margin: 0 0 6px;
+}
+.legal-section p {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+
 .back-btn {
   background: none;
   border: none;
@@ -771,12 +799,41 @@ body.shared-route-mode .bottom-nav {
   text-decoration: underline;
   cursor: pointer;
 }
+.privacy-policy-row-link {
+  display: block;
+  margin-top: 4px;
+}
 .gate-warning {
   margin: 20px 0 0;
 }
 .gate-warning p {
   margin: 0 0 12px;
   color: var(--ink-muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
+.gate-consent-label {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 4px;
+  color: var(--ink-2);
+  font-size: 0.82rem;
+  line-height: 1.4;
+}
+.gate-consent-label input {
+  margin-top: 2px;
+  flex: 0 0 auto;
+}
+.gate-consent-label .gate-switch-link {
+  font-size: inherit;
+  font-weight: 700;
+  text-decoration: underline;
+  padding: 0;
+}
+.gate-info {
+  margin: 0 0 20px;
+  color: var(--ink-2);
   font-size: 0.85rem;
   line-height: 1.5;
 }
@@ -1158,6 +1215,22 @@ body.shared-route-mode .bottom-nav {
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--ink);
+  cursor: pointer;
+}
+
+.shared-route-back-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.85rem;
   cursor: pointer;
 }
 

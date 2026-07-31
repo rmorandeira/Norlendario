@@ -3,11 +3,11 @@ const Api = {
     const r = await fetch("/api/auth/me");
     return r.json();
   },
-  async signup(username, password) {
+  async signup(username, password, email, acceptedPrivacyPolicy) {
     const r = await fetch("/api/auth/signup", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ username, password })
+      body: JSON.stringify({ username, password, email, acceptedPrivacyPolicy })
     });
     const data = await r.json();
     if (!r.ok) throw new Error(data.error || "generic");
@@ -25,6 +25,22 @@ const Api = {
   },
   async logout() {
     await fetch("/api/auth/logout", { method: "POST" });
+  },
+  async forgotPassword(email) {
+    await fetch("/api/auth/forgot-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email })
+    });
+  },
+  async resetPassword(token, password) {
+    const r = await fetch("/api/auth/reset-password", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, password })
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || "generic");
   },
   async deleteAccount() {
     await fetch("/api/auth/account", { method: "DELETE" });

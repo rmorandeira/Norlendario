@@ -9,7 +9,12 @@ const db = require("./db");
 const { getArtistInfo, fetchAndStoreArtistInfo, setManualOverride } = require("./artistInfo");
 const { STAGE_COORDS, getRoute, fetchAndStoreRoute } = require("./routes");
 const schedule = require("./schedule");
+const { sendEmail } = require("./mailer");
 const FESTIVAL_DATA = require("./public/data.js");
+
+// Bump whenever the privacy policy text changes meaningfully — stored on
+// each account as proof of which version they consented to.
+const PRIVACY_POLICY_VERSION = "2026-07-31";
 
 const app = express();
 app.set("trust proxy", 1); // Railway sits behind a TLS-terminating proxy
@@ -34,12 +39,18 @@ app.use(
   })
 );
 
-const insertUser = db.prepare(
-  "INSERT INTO users (username, password_hash) VALUES (?, ?)"
-);
+const insertUser = db.prepare(`
+  INSERT INTO users (username, password_hash, email, consent_ip, consent_user_agent, consent_policy_version)
+  VALUES (@username, @passwordHash, @email, @consentIp, @consentUserAgent, @consentPolicyVersion)
+`);
 const findUserByUsername = db.prepare(
   "SELECT * FROM users WHERE username = ?"
 );
+const findUserByEmail = db.prepare("SELECT * FROM users WHERE email = ?");
+const setResetToken = db.prepare("UPDATE users SET reset_token = ?, reset_token_expires_at = ? WHERE id = ?");
+const getUserByResetToken = db.prepare("SELECT * FROM users WHERE reset_token = ?");
+const clearResetToken = db.prepare("UPDATE users SET reset_token = NULL, reset_token_expires_at = NULL WHERE id = ?");
+const setPasswordHash = db.prepare("UPDATE users SET password_hash = ? WHERE id = ?");
 const listFavorites = db.prepare(
   "SELECT act_id FROM favorites WHERE user_id = ?"
 );
@@ -157,6 +168,8 @@ const sweepStatus = {
 app.post("/api/auth/signup", (req, res) => {
   const username = String(req.body.username || "").trim();
   const password = String(req.body.password || "");
+  const email = String(req.body.email || "").trim().toLowerCase();
+  const acceptedPrivacyPolicy = Boolean(req.body.acceptedPrivacyPolicy);
 
   if (username.length < 3 || username.length > 32) {
     return res.status(400).json({ error: "username_length" });
@@ -164,14 +177,30 @@ app.post("/api/auth/signup", (req, res) => {
   if (password.length < 4) {
     return res.status(400).json({ error: "password_length" });
   }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: "invalid_email" });
+  }
+  if (!acceptedPrivacyPolicy) {
+    return res.status(400).json({ error: "privacy_policy_required" });
+  }
 
   const passwordHash = bcrypt.hashSync(password, 10);
   let userId;
   try {
-    userId = insertUser.run(username, passwordHash).lastInsertRowid;
+    userId = insertUser.run({
+      username,
+      passwordHash,
+      email,
+      consentIp: req.ip,
+      consentUserAgent: req.get("user-agent") || "",
+      consentPolicyVersion: PRIVACY_POLICY_VERSION
+    }).lastInsertRowid;
   } catch (err) {
-    if (String(err.message).includes("UNIQUE")) {
+    if (String(err.message).includes("users.username")) {
       return res.status(409).json({ error: "username_taken" });
+    }
+    if (String(err.message).includes("users.email")) {
+      return res.status(409).json({ error: "email_taken" });
     }
     throw err;
   }
@@ -179,6 +208,44 @@ app.post("/api/auth/signup", (req, res) => {
   req.session.userId = userId;
   req.session.username = username;
   res.json({ username });
+});
+
+app.post("/api/auth/forgot-password", async (req, res) => {
+  const email = String(req.body.email || "").trim().toLowerCase();
+  const user = email ? findUserByEmail.get(email) : null;
+  if (user) {
+    const token = crypto.randomBytes(24).toString("base64url");
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    setResetToken.run(token, expiresAt, user.id);
+    const resetUrl = `${req.protocol}://${req.get("host")}/reset-password/${token}`;
+    try {
+      await sendEmail({
+        to: user.email,
+        subject: "Recupera tu contraseña de Norlendario",
+        html: `<p>Hola ${user.username},</p><p>Pulsa el siguiente enlace para elegir una nueva contraseña. Caduca en 1 hora.</p><p><a href="${resetUrl}">${resetUrl}</a></p><p>Si no has solicitado esto, puedes ignorar este correo.</p>`
+      });
+    } catch (err) {
+      console.error("Failed to send password reset email:", err.message);
+    }
+  }
+  // Same response whether or not the email is registered — avoids leaking
+  // which addresses have accounts.
+  res.status(204).end();
+});
+
+app.post("/api/auth/reset-password", (req, res) => {
+  const token = String(req.body.token || "");
+  const password = String(req.body.password || "");
+  if (password.length < 4) {
+    return res.status(400).json({ error: "password_length" });
+  }
+  const user = token ? getUserByResetToken.get(token) : null;
+  if (!user || !user.reset_token_expires_at || new Date(user.reset_token_expires_at) < new Date()) {
+    return res.status(400).json({ error: "invalid_or_expired_token" });
+  }
+  setPasswordHash.run(bcrypt.hashSync(password, 10), user.id);
+  clearResetToken.run(user.id);
+  res.status(204).end();
 });
 
 app.post("/api/auth/login", (req, res) => {
@@ -615,6 +682,10 @@ app.delete("/api/admin/acts/:id", requireAdmin, (req, res) => {
 // Client-rendered page for a publicly shared route — same SPA shell, the
 // client reads the token out of the URL itself.
 app.get("/ruta/:token", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+app.get("/reset-password/:token", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 

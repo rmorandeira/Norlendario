@@ -32,6 +32,10 @@
   // at the real production app, even when tested from localhost.
   const APP_URL = "https://norlendario.web.up.railway.app";
 
+  // Keep in sync with PRIVACY_POLICY_VERSION in server.js — bump both when
+  // the policy text changes meaningfully.
+  const PRIVACY_POLICY_VERSION = "2026-07-31";
+
   const state = {
     lang: (navigator.language || "es").toLowerCase().startsWith("en") ? "en" : "es",
     theme: localStorage.getItem(THEME_KEY), // "light" | "dark" | null (follow system)
@@ -48,8 +52,9 @@
     peopleSearch: "",
     peopleSort: "name", // "name" | "favorites" | "attending"
     favoritesOnly: false,
-    authMode: "login", // "login" | "signup"
+    authMode: "login", // "login" | "signup" | "forgot"
     authError: null,
+    forgotPasswordSent: false,
     confirmingDelete: false
   };
 
@@ -460,6 +465,44 @@
       list.appendChild(chip);
     });
     els.tbaSection.appendChild(list);
+  }
+
+  // --- Privacy policy / terms of use overlay ---
+  // Reachable from the signup checkbox and from Usuario. Uses a higher
+  // z-index than the auth gate so it also works before logging in.
+
+  function closeLegalView() {
+    document.body.classList.remove("legal-open");
+  }
+
+  function openLegalView() {
+    document.body.classList.add("legal-open");
+    let panel = document.getElementById("legalView");
+    if (!panel) {
+      panel = document.createElement("div");
+      panel.id = "legalView";
+      panel.className = "artist-view legal-view";
+      document.body.appendChild(panel);
+    }
+    const lang = state.lang;
+    const policy = t(lang, "privacyPolicy");
+    const sectionsHTML = policy.sections
+      .map(
+        (s) => `
+        <section class="legal-section">
+          <h3>${escapeHtml(s.heading)}</h3>
+          <p>${escapeHtml(s.body)}</p>
+        </section>`
+      )
+      .join("");
+    panel.innerHTML = `
+      <div class="artist-view-inner">
+        <button class="back-btn" id="legalBackBtn">&larr; ${t(lang, "back")}</button>
+        <h2>${escapeHtml(policy.title)}</h2>
+        <p class="legal-intro">${escapeHtml(policy.intro).replace("{version}", PRIVACY_POLICY_VERSION)}</p>
+        ${sectionsHTML}
+      </div>`;
+    document.getElementById("legalBackBtn").addEventListener("click", closeLegalView);
   }
 
   function openDetail(act, day) {
@@ -1413,18 +1456,26 @@
     };
 
     const headerHTML = `
-      <div class="route-header-text">
-        <h2>${t(lang, "sharedRouteTitle").replace("{name}", escapeHtml(data.username))}</h2>
-        <p class="page-subtitle">${t(lang, "routeSubtitle")}</p>
+      <div class="route-header">
+        <div class="route-header-text">
+          <h2>${t(lang, "sharedRouteTitle").replace("{name}", escapeHtml(data.username))}</h2>
+          <p class="page-subtitle">${t(lang, "routeSubtitle")}</p>
+        </div>
+        <button type="button" class="shared-route-back-btn" id="sharedRouteBackBtn">
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M15.5 4.5 8 12l7.5 7.5 1.4-1.4L10.8 12l6.1-6.1-1.4-1.4Z"/></svg>
+          ${t(lang, "back")}
+        </button>
       </div>`;
 
     if (items.length === 0) {
       container.innerHTML = `<div class="page-inner">${headerHTML}<p class="empty-msg">${t(lang, "routeEmptyMsg")}</p></div>`;
+      document.getElementById("sharedRouteBackBtn").addEventListener("click", () => (window.location.href = "/"));
       return;
     }
 
     const { html: listHTML, connectors, thumbs } = buildRouteListHTML(items, lang, sharedRouteCommentBlockHTML);
     container.innerHTML = `<div class="page-inner">${headerHTML}${listHTML}</div>`;
+    document.getElementById("sharedRouteBackBtn").addEventListener("click", () => (window.location.href = "/"));
 
     container.querySelectorAll(".route-item").forEach((el) => {
       el.addEventListener("click", () => {
@@ -1438,6 +1489,62 @@
     });
     connectors.forEach(({ id, from, to }) => loadRouteConnector(id, from, to));
     thumbs.forEach(({ id, artist }) => loadArtistThumb(id, artist));
+  }
+
+  // --- Public reset-password page (/reset-password/:token), reached from
+  // the email link sent by /api/auth/forgot-password ---
+
+  function renderResetPasswordView(token) {
+    document.body.classList.add("shared-route-mode");
+    const container = document.createElement("div");
+    container.id = "resetPasswordView";
+    container.className = "shared-route-view page-view";
+    document.body.appendChild(container);
+    const lang = state.lang;
+
+    function showForm(errorMsg) {
+      container.innerHTML = `
+        <div class="page-inner">
+          <div class="gate-card">
+            <div class="route-header-text">
+              <h1 class="app-name-heading">${t(lang, "appName")}</h1>
+              <p class="page-subtitle">${t(lang, "resetPasswordTitle")}</p>
+            </div>
+            <form id="resetPasswordForm" novalidate>
+              <label>${t(lang, "newPasswordFieldLabel")}
+                <input type="password" name="password" autocomplete="new-password" required minlength="4" />
+              </label>
+              ${errorMsg ? `<p class="auth-error">${errorMsg}</p>` : ""}
+              <button type="submit" class="auth-submit">${t(lang, "resetPasswordSaveBtn")}</button>
+            </form>
+          </div>
+        </div>`;
+      document.getElementById("resetPasswordForm").addEventListener("submit", async (e) => {
+        e.preventDefault();
+        try {
+          await Api.resetPassword(token, e.target.password.value);
+          showSuccess();
+        } catch {
+          showForm(t(lang, "resetPasswordInvalidMsg"));
+        }
+      });
+    }
+
+    function showSuccess() {
+      container.innerHTML = `
+        <div class="page-inner">
+          <div class="gate-card">
+            <div class="route-header-text">
+              <h1 class="app-name-heading">${t(lang, "appName")}</h1>
+            </div>
+            <p class="empty-msg">${t(lang, "resetPasswordSuccessMsg")}</p>
+            <button type="button" class="guest-btn" id="goToLoginFromResetBtn">${t(lang, "goToLoginBtn")}</button>
+          </div>
+        </div>`;
+      document.getElementById("goToLoginFromResetBtn").addEventListener("click", () => (window.location.href = "/"));
+    }
+
+    showForm(null);
   }
 
   async function loadRouteConnector(containerId, from, to) {
@@ -1694,6 +1801,7 @@
             <a href="https://ko-fi.com/F1F41CM0Q" target="_blank" rel="noopener noreferrer"><img height="36" style="border:0;height:36px" src="https://storage.ko-fi.com/cdn/kofi3.png?v=6" alt="Buy Me a Coffee at ko-fi.com" /></a>
           </div>
           <p>${t(lang, "aboutContact").replace("{email}", '<a href="mailto:rmorandeira@gmail.com">rmorandeira@gmail.com</a>')}</p>
+          <button type="button" class="gate-switch-link privacy-policy-row-link" id="userPrivacyPolicyBtn">${t(lang, "privacyPolicyLink")}</button>
         </div>
 
         ${
@@ -1722,6 +1830,7 @@
       renderAll();
     });
     document.getElementById("themeToggleBtn").addEventListener("click", toggleTheme);
+    document.getElementById("userPrivacyPolicyBtn").addEventListener("click", openLegalView);
 
     if (guest) {
       document.getElementById("userLoginBtn").addEventListener("click", handleLogout);
@@ -1800,18 +1909,38 @@
 
   function renderGate() {
     const lang = state.lang;
-    const isSignup = state.authMode === "signup";
-    els.authGate.innerHTML = `
-      <div class="gate-card">
-        <div class="route-header-text">
-          <h1 class="app-name-heading">${t(lang, "appName")}</h1>
-          <p class="page-subtitle">${t(lang, "routeSubtitle")}</p>
-        </div>
-        <h2 class="gate-mode-heading">${t(lang, isSignup ? "gateModeSignup" : "gateModeLogin")}</h2>
+    const mode = state.authMode;
+    const isSignup = mode === "signup";
+    const isForgot = mode === "forgot";
+
+    let bodyHTML;
+    if (isForgot) {
+      bodyHTML = state.forgotPasswordSent
+        ? `
+          <p class="gate-info">${t(lang, "forgotPasswordSentMsg")}</p>
+          <button type="button" class="auth-submit" id="backToLoginFromForgotBtn">${t(lang, "goToLoginBtn")}</button>`
+        : `
+          <p class="gate-info">${t(lang, "forgotPasswordInstructions")}</p>
+          <form id="forgotForm" novalidate>
+            <label>${t(lang, "emailFieldLabel")}
+              <input type="email" name="email" autocomplete="email" required />
+            </label>
+            <button type="submit" class="auth-submit">${t(lang, "forgotPasswordSendBtn")}</button>
+          </form>
+          <p class="gate-switch-mode"><button type="button" class="gate-switch-link" id="backToLoginBtn">${t(lang, "goToLoginBtn")}</button></p>`;
+    } else {
+      bodyHTML = `
         <form id="authForm" novalidate>
           <label>${t(lang, "nameFieldLabel")}
             <input type="text" name="username" autocomplete="username" required minlength="3" maxlength="32" />
           </label>
+          ${
+            isSignup
+              ? `<label>${t(lang, "emailFieldLabel")}
+                   <input type="email" name="email" autocomplete="email" required />
+                 </label>`
+              : ""
+          }
           <label>${t(lang, "passwordLabel")}
             <input type="password" name="password" autocomplete="${isSignup ? "new-password" : "current-password"}" required minlength="4" />
           </label>
@@ -1831,14 +1960,51 @@
                  <p>${t(lang, "signupWarning1")}</p>
                  <p>${t(lang, "signupWarning2")}</p>
                  <p>${t(lang, "signupWarning3")}</p>
+                 <label class="gate-consent-label">
+                   <input type="checkbox" id="privacyConsentCheckbox" />
+                   <span>${t(lang, "privacyConsentLabel").replace("{link}", `<button type="button" class="gate-switch-link" id="openPrivacyPolicyBtn">${t(lang, "privacyPolicyLink")}</button>`)}</span>
+                 </label>
                </div>`
             : `<div class="gate-divider"><span>${t(lang, "orDivider")}</span></div>
                <button class="guest-btn" id="guestBtn">${t(lang, "guestBtn")}</button>
-               <p class="gate-switch-mode">${t(lang, "noAccountPrompt")} <button type="button" class="gate-switch-link" id="switchToSignupBtn">${t(lang, "createAccountLink")}</button></p>`
-        }
+               <p class="gate-switch-mode">${t(lang, "noAccountPrompt")} <button type="button" class="gate-switch-link" id="switchToSignupBtn">${t(lang, "createAccountLink")}</button></p>
+               <p class="gate-switch-mode"><button type="button" class="gate-switch-link" id="forgotPasswordBtn">${t(lang, "forgotPasswordLink")}</button></p>`
+        }`;
+    }
+
+    els.authGate.innerHTML = `
+      <div class="gate-card">
+        <div class="route-header-text">
+          <h1 class="app-name-heading">${t(lang, "appName")}</h1>
+          <p class="page-subtitle">${t(lang, "routeSubtitle")}</p>
+        </div>
+        <h2 class="gate-mode-heading">${t(lang, isForgot ? "forgotPasswordTitle" : isSignup ? "gateModeSignup" : "gateModeLogin")}</h2>
+        ${bodyHTML}
         <p class="gate-disclaimer">${t(lang, "unofficialDisclaimer")}<br />v${APP_VERSION}</p>
       </div>
     `;
+
+    if (isForgot) {
+      if (state.forgotPasswordSent) {
+        document.getElementById("backToLoginFromForgotBtn").addEventListener("click", () => {
+          state.authMode = "login";
+          state.forgotPasswordSent = false;
+          renderGate();
+        });
+      } else {
+        document.getElementById("forgotForm").addEventListener("submit", async (e) => {
+          e.preventDefault();
+          await Api.forgotPassword(e.target.email.value.trim());
+          state.forgotPasswordSent = true;
+          renderGate();
+        });
+        document.getElementById("backToLoginBtn").addEventListener("click", () => {
+          state.authMode = "login";
+          renderGate();
+        });
+      }
+      return;
+    }
 
     document.getElementById("authForm").addEventListener("submit", handleAuthSubmit);
     if (isSignup) {
@@ -1847,11 +2013,17 @@
         state.authError = null;
         renderGate();
       });
+      document.getElementById("openPrivacyPolicyBtn").addEventListener("click", openLegalView);
     } else {
       document.getElementById("guestBtn").addEventListener("click", handleGuestLogin);
       document.getElementById("switchToSignupBtn").addEventListener("click", () => {
         state.authMode = "signup";
         state.authError = null;
+        renderGate();
+      });
+      document.getElementById("forgotPasswordBtn").addEventListener("click", () => {
+        state.authMode = "forgot";
+        state.forgotPasswordSent = false;
         renderGate();
       });
     }
@@ -1862,6 +2034,9 @@
       username_length: "errUsernameLength",
       password_length: "errPasswordLength",
       username_taken: "errUsernameTaken",
+      email_taken: "errEmailTaken",
+      invalid_email: "errEmailInvalid",
+      privacy_policy_required: "privacyConsentRequired",
       invalid_credentials: "errInvalidCredentials"
     };
     return t(state.lang, map[err && err.message] || "errGeneric");
@@ -1874,8 +2049,16 @@
     const password = form.password.value;
     const isSignup = state.authMode === "signup";
 
+    if (isSignup && !document.getElementById("privacyConsentCheckbox").checked) {
+      state.authError = t(state.lang, "privacyConsentRequired");
+      renderGate();
+      return;
+    }
+
     try {
-      const data = isSignup ? await Api.signup(username, password) : await Api.login(username, password);
+      const data = isSignup
+        ? await Api.signup(username, password, form.email.value.trim(), true)
+        : await Api.login(username, password);
       state.user = data.username;
       state.favorites = new Set(await Api.getFavorites());
       state.comments = commentsMapFromObject(await Api.getComments());
@@ -1937,6 +2120,12 @@
     const sharedMatch = window.location.pathname.match(/^\/ruta\/([A-Za-z0-9_-]+)\/?$/);
     if (sharedMatch) {
       await renderSharedRouteView(sharedMatch[1]);
+      return;
+    }
+
+    const resetMatch = window.location.pathname.match(/^\/reset-password\/([A-Za-z0-9_-]+)\/?$/);
+    if (resetMatch) {
+      renderResetPasswordView(resetMatch[1]);
       return;
     }
 
