@@ -2,14 +2,8 @@ const db = require("./db");
 
 // Geocoded once via OpenStreetMap Nominatim — these venues never move, so
 // there's no reason to geocode them again on every boot.
-//
-// Azcárraga's point is nudged ~95m north-west from the plaza's own Nominatim
-// centroid: OSRM's foot-routing graph has no nearby entry point from that
-// centroid (nearest reachable node was 188m away, through a tunnel, giving
-// physically impossible routes to nearby stages), while this point snaps
-// consistently ~95m to a real connected path in every direction.
 const STAGE_COORDS = {
-  "Azcárraga": { lat: 43.370654, lng: -8.393472 },
+  "Azcárraga": { lat: 43.3698456, lng: -8.3931007 },
   "Campo da Leña": { lat: 43.3730877, lng: -8.3967175 },
   "Santa Margarida": { lat: 43.3611023, lng: -8.4135179 },
   "Castelo de Santo Antón": { lat: 43.3656897, lng: -8.3875228 },
@@ -53,6 +47,27 @@ function directionsUrl(fromStage, toStage) {
 // fine though, so minutes are derived from that at a fixed walking pace.
 const WALK_METERS_PER_MINUTE = 80; // ~4.8 km/h
 
+function haversineMeters(a, b) {
+  const R = 6371000;
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const dLat = toRad(b.lat - a.lat);
+  const dLng = toRad(b.lng - a.lng);
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(a.lat)) * Math.cos(toRad(b.lat)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+}
+
+// OSRM's public foot-routing graph has real gaps in some A Coruña streets
+// (first seen at Azcárraga: its plaza isn't well connected in OSM's
+// pedestrian data, so OSRM silently snapped the origin to a node 188m away
+// near an unrelated tunnel — every route computed "from Azcárraga" was
+// actually walked from there instead, giving distances way off from what
+// Google Maps shows for the same pair). Rather than chase that per stage,
+// treat a bad snap on either end as "no reliable route": fall back to
+// straight-line distance with a typical historic-center detour factor, and
+// a straight connecting line instead of a misleading traced polyline.
+const MAX_TRUSTED_SNAP_METERS = 120;
+const FALLBACK_DETOUR_FACTOR = 1.3;
+
 // Only called by scripts/sweep-routes.js — never on a live user request.
 async function fetchAndStoreRoute(fromStage, toStage) {
   const a = STAGE_COORDS[fromStage];
@@ -66,8 +81,20 @@ async function fetchAndStoreRoute(fromStage, toStage) {
   const route = data.routes && data.routes[0];
   if (!route) throw new Error("no route found");
 
-  const minutes = Math.max(1, Math.round(route.distance / WALK_METERS_PER_MINUTE));
-  const geometry = route.geometry.coordinates; // [ [lng, lat], ... ]
+  const wellSnapped = data.waypoints.every((wp) => wp.distance <= MAX_TRUSTED_SNAP_METERS);
+
+  let minutes, geometry;
+  if (wellSnapped) {
+    minutes = Math.max(1, Math.round(route.distance / WALK_METERS_PER_MINUTE));
+    geometry = route.geometry.coordinates; // [ [lng, lat], ... ]
+  } else {
+    const straight = haversineMeters(a, b);
+    minutes = Math.max(1, Math.round((straight * FALLBACK_DETOUR_FACTOR) / WALK_METERS_PER_MINUTE));
+    geometry = [
+      [a.lng, a.lat],
+      [b.lng, b.lat]
+    ];
+  }
 
   upsert.run({
     pairKey: pairKey(fromStage, toStage),
