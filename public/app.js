@@ -1351,7 +1351,7 @@
     const { token, visitorToken } = sharedRoute;
     return {
       getComments: () => sharedRoute.comments.get(id) || [],
-      needsAuthorName: () => !localStorage.getItem(VISITOR_NAME_KEY),
+      needsAuthorName: () => !sharedRoute.viewerAuthenticated && !localStorage.getItem(VISITOR_NAME_KEY),
       setAuthorName: (name) => localStorage.setItem(VISITOR_NAME_KEY, name),
       addComment: async (text) => {
         const authorName = localStorage.getItem(VISITOR_NAME_KEY) || "";
@@ -1404,7 +1404,13 @@
     }
 
     const items = resolveRouteItems(data.favorites);
-    sharedRoute = { token, visitorToken: getVisitorToken(), items, comments: commentsMapFromObject(data.comments) };
+    sharedRoute = {
+      token,
+      visitorToken: getVisitorToken(),
+      viewerAuthenticated: Boolean(data.viewerAuthenticated),
+      items,
+      comments: commentsMapFromObject(data.comments)
+    };
 
     const headerHTML = `
       <div class="route-header-text">

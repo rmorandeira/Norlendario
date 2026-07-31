@@ -107,6 +107,13 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+// Real name if the profile has one, falling back to the username — used
+// wherever a comment needs an author label instead of asking for one.
+function accountDisplayName(user) {
+  const fullName = [user.first_name, user.last_name].filter(Boolean).join(" ").trim();
+  return fullName || user.username;
+}
+
 // A comment belongs to whoever authored it: an account holder (compared by
 // user id) or, for public-link visitors without an account, whoever holds
 // the matching client-generated visitor token.
@@ -320,7 +327,7 @@ app.post("/api/comments", requireAuth, (req, res) => {
     ownerId: req.session.userId,
     actId,
     authorUserId: req.session.userId,
-    authorName: req.session.username,
+    authorName: accountDisplayName(getUserById.get(req.session.userId)),
     visitorToken: null,
     comment
   });
@@ -377,7 +384,8 @@ app.get("/api/shared/:token", (req, res) => {
   res.json({
     username: owner.username,
     favorites,
-    comments: serializeRouteComments(rows, req.session.userId || null, visitorToken)
+    comments: serializeRouteComments(rows, req.session.userId || null, visitorToken),
+    viewerAuthenticated: Boolean(req.session.userId)
   });
 });
 
@@ -392,9 +400,10 @@ app.post("/api/shared/:token/comments", (req, res) => {
   let authorUserId = null;
   let authorName;
   let visitorToken = null;
-  if (req.session.userId === owner.id) {
-    authorUserId = owner.id;
-    authorName = req.session.username;
+  if (req.session.userId) {
+    const viewer = getUserById.get(req.session.userId);
+    authorUserId = viewer.id;
+    authorName = accountDisplayName(viewer);
   } else {
     authorName = String(req.body.authorName || "").trim().slice(0, 40);
     visitorToken = String(req.body.visitorToken || "").trim();
