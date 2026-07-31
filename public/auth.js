@@ -30,6 +30,16 @@ const Api = {
   async logout() {
     await fetch("/api/auth/logout", { method: "POST" });
   },
+  async googleAuth(credential, intent, acceptedPrivacyPolicy) {
+    const r = await fetch("/api/auth/google", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ credential, intent, acceptedPrivacyPolicy })
+    });
+    const data = await r.json();
+    if (!r.ok) throw new Error(data.error || "generic");
+    return data;
+  },
   async forgotPassword(email) {
     await fetch("/api/auth/forgot-password", {
       method: "POST",

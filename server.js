@@ -5,6 +5,7 @@ const crypto = require("crypto");
 const express = require("express");
 const session = require("express-session");
 const bcrypt = require("bcryptjs");
+const { OAuth2Client } = require("google-auth-library");
 const db = require("./db");
 const { getArtistInfo, fetchAndStoreArtistInfo, setManualOverride } = require("./artistInfo");
 const { STAGE_COORDS, getRoute, fetchAndStoreRoute } = require("./routes");
@@ -15,6 +16,10 @@ const FESTIVAL_DATA = require("./public/data.js");
 // Bump whenever the privacy policy text changes meaningfully — stored on
 // each account as proof of which version they consented to.
 const PRIVACY_POLICY_VERSION = "2026-07-31";
+
+// Not a secret — safe to hardcode, same as the client-side copy in app.js.
+const GOOGLE_CLIENT_ID = "841182936643-dfjokosrqcu0ba0tj71g4d9gd64pn1hp.apps.googleusercontent.com";
+const googleClient = new OAuth2Client(GOOGLE_CLIENT_ID);
 
 const app = express();
 app.set("trust proxy", 1); // Railway sits behind a TLS-terminating proxy
@@ -47,6 +52,8 @@ const findUserByUsername = db.prepare(
   "SELECT * FROM users WHERE username = ?"
 );
 const findUserByEmail = db.prepare("SELECT * FROM users WHERE email = ?");
+const findUserByGoogleId = db.prepare("SELECT * FROM users WHERE google_id = ?");
+const linkGoogleId = db.prepare("UPDATE users SET google_id = ? WHERE id = ?");
 const setResetToken = db.prepare("UPDATE users SET reset_token = ?, reset_token_expires_at = ? WHERE id = ?");
 const getUserByResetToken = db.prepare("SELECT * FROM users WHERE reset_token = ?");
 const clearResetToken = db.prepare("UPDATE users SET reset_token = NULL, reset_token_expires_at = NULL WHERE id = ?");
@@ -119,6 +126,16 @@ function suggestUsername(base) {
     if (!findUserByUsername.get(candidate)) return candidate;
   }
   return `${trimmedBase}${Math.floor(1000 + Math.random() * 9000)}`;
+}
+
+// Derives a starting username from a Google profile (email local-part,
+// falling back to the display name) — suggestUsername() then dedupes it.
+function usernameBaseFromGoogleProfile(email, name) {
+  const local = (email || "").split("@")[0] || "";
+  let base = local.replace(/[^a-zA-Z0-9_.-]/g, "").slice(0, 28);
+  if (base.length < 3) base = (name || "").replace(/[^a-zA-Z0-9_.-]/g, "").slice(0, 28);
+  if (base.length < 3) base = "usuario";
+  return base;
 }
 
 function requireAdmin(req, res, next) {
@@ -227,6 +244,62 @@ app.post("/api/auth/signup", (req, res) => {
     subject: "Bienvenido/a a Norlendario",
     html: `<p>Hola ${username},</p><p>Tu cuenta de Norlendario se ha creado correctamente con este correo (${email}).</p><p>Puedes usarla ya para guardar tus favoritos del Festival Noroeste 2026, compartir tu ruta y comentar. Si en algún momento olvidas tu contraseña, podrás recuperarla desde la app usando este mismo correo.</p><p>Un saludo.</p>`
   }).catch((err) => console.error("Failed to send welcome email:", err.message));
+});
+
+// "Sign in with Google": the client verifies nothing itself, it just hands
+// us the ID token Google issued; we verify the signature against Google's
+// own keys. intent "login" only signs into an existing (or email-matched)
+// account — it never creates one, since that would skip the consent
+// checkbox. intent "signup" requires acceptedPrivacyPolicy and creates an
+// account on first use.
+app.post("/api/auth/google", async (req, res) => {
+  let payload;
+  try {
+    const ticket = await googleClient.verifyIdToken({
+      idToken: String(req.body.credential || ""),
+      audience: GOOGLE_CLIENT_ID
+    });
+    payload = ticket.getPayload();
+  } catch {
+    return res.status(400).json({ error: "invalid_google_token" });
+  }
+
+  const googleId = payload.sub;
+  const email = String(payload.email || "").trim().toLowerCase();
+
+  let user = findUserByGoogleId.get(googleId);
+  if (!user && email) {
+    user = findUserByEmail.get(email);
+    if (user) linkGoogleId.run(googleId, user.id);
+  }
+
+  if (!user) {
+    if (req.body.intent !== "signup") {
+      return res.status(404).json({ error: "no_account" });
+    }
+    if (!req.body.acceptedPrivacyPolicy) {
+      return res.status(400).json({ error: "privacy_policy_required" });
+    }
+    const base = usernameBaseFromGoogleProfile(email, payload.name);
+    const username = findUserByUsername.get(base) ? suggestUsername(base) : base;
+    const userId = insertUser.run({
+      username,
+      passwordHash: bcrypt.hashSync(crypto.randomBytes(24).toString("hex"), 10),
+      email: email || null,
+      consentIp: req.ip,
+      consentUserAgent: req.get("user-agent") || "",
+      consentPolicyVersion: PRIVACY_POLICY_VERSION
+    }).lastInsertRowid;
+    linkGoogleId.run(googleId, userId);
+    if (payload.given_name || payload.family_name) {
+      updateProfile.run(payload.given_name || "", payload.family_name || "", email || "", userId);
+    }
+    user = getUserById.get(userId);
+  }
+
+  req.session.userId = user.id;
+  req.session.username = user.username;
+  res.json({ username: user.username });
 });
 
 app.post("/api/auth/forgot-password", async (req, res) => {

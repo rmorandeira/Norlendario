@@ -36,6 +36,10 @@
   // the policy text changes meaningfully.
   const PRIVACY_POLICY_VERSION = "2026-07-31";
 
+  // Not a secret — the Google Identity Services client ID is meant to be
+  // public. Keep in sync with GOOGLE_CLIENT_ID in server.js.
+  const GOOGLE_CLIENT_ID = "841182936643-dfjokosrqcu0ba0tj71g4d9gd64pn1hp.apps.googleusercontent.com";
+
   const state = {
     lang: (navigator.language || "es").toLowerCase().startsWith("en") ? "en" : "es",
     theme: localStorage.getItem(THEME_KEY), // "light" | "dark" | null (follow system)
@@ -2027,8 +2031,10 @@
                    <input type="checkbox" id="privacyConsentCheckbox" />
                    <span>${t(lang, "privacyConsentLabel").replace("{link}", `<button type="button" class="gate-switch-link" id="openPrivacyPolicyBtn">${t(lang, "privacyPolicyLink")}</button>`)}</span>
                  </label>
-               </div>`
+               </div>
+               <div class="google-btn-container" id="googleSignupBtn"></div>`
             : `<div class="gate-divider"><span>${t(lang, "orDivider")}</span></div>
+               <div class="google-btn-container" id="googleLoginBtn"></div>
                <button class="guest-btn" id="guestBtn">${t(lang, "guestBtn")}</button>
                <p class="gate-switch-mode">${t(lang, "noAccountPrompt")} <button type="button" class="gate-switch-link" id="switchToSignupBtn">${t(lang, "createAccountLink")}</button></p>
                <p class="gate-switch-mode"><button type="button" class="gate-switch-link" id="forgotPasswordBtn">${t(lang, "forgotPasswordLink")}</button></p>`
@@ -2087,7 +2093,9 @@
           renderGate();
         });
       }
+      renderGoogleButtonWhenReady("googleSignupBtn", "signup", 10);
     } else {
+      renderGoogleButtonWhenReady("googleLoginBtn", "login", 10);
       document.getElementById("guestBtn").addEventListener("click", handleGuestLogin);
       document.getElementById("switchToSignupBtn").addEventListener("click", () => {
         state.authMode = "signup";
@@ -2132,19 +2140,68 @@
       const data = isSignup
         ? await Api.signup(username, password, form.email.value.trim(), true)
         : await Api.login(username, password);
-      state.user = data.username;
-      state.favorites = new Set(await Api.getFavorites());
-      state.comments = commentsMapFromObject(await Api.getComments());
-      state.hasUnreadComments = hasAnyUnreadComment(state.comments);
-      state.profile = (await Api.getProfile()) || state.profile;
-      state.authError = null;
-      state.usernameSuggestion = null;
-      hideGate();
-      renderAll();
+      await afterAuthSuccess(data.username);
     } catch (err) {
       state.authError = authErrorMessage(err);
       state.usernameSuggestion = err.suggestion || null;
       renderGate();
+    }
+  }
+
+  // --- Sign in with Google ---
+  // intent "login" only ever signs into an existing (or email-matched)
+  // account; intent "signup" can create one, gated by the same consent
+  // checkbox as the regular signup form.
+
+  async function afterAuthSuccess(username) {
+    state.user = username;
+    state.favorites = new Set(await Api.getFavorites());
+    state.comments = commentsMapFromObject(await Api.getComments());
+    state.hasUnreadComments = hasAnyUnreadComment(state.comments);
+    state.profile = (await Api.getProfile()) || state.profile;
+    state.authError = null;
+    state.usernameSuggestion = null;
+    hideGate();
+    renderAll();
+  }
+
+  async function handleGoogleCredential(response, intent) {
+    if (intent === "signup" && !document.getElementById("privacyConsentCheckbox")?.checked) {
+      state.authError = t(state.lang, "privacyConsentRequired");
+      renderGate();
+      return;
+    }
+    try {
+      const data = await Api.googleAuth(response.credential, intent, intent === "signup");
+      await afterAuthSuccess(data.username);
+    } catch (err) {
+      state.authError = err.message === "no_account" ? t(state.lang, "googleNoAccount") : authErrorMessage(err);
+      renderGate();
+    }
+  }
+
+  function renderGoogleButton(containerId, intent) {
+    const container = document.getElementById(containerId);
+    if (!container || !window.google || !google.accounts || !google.accounts.id) return;
+    google.accounts.id.initialize({
+      client_id: GOOGLE_CLIENT_ID,
+      callback: (response) => handleGoogleCredential(response, intent)
+    });
+    google.accounts.id.renderButton(container, {
+      theme: effectiveTheme() === "dark" ? "filled_black" : "outline",
+      size: "large",
+      width: 300,
+      text: intent === "signup" ? "signup_with" : "signin_with"
+    });
+  }
+
+  // The GIS script loads async — if it's not ready yet when the gate first
+  // renders, retry briefly instead of silently showing no button.
+  function renderGoogleButtonWhenReady(containerId, intent, attemptsLeft) {
+    if (window.google && google.accounts && google.accounts.id) {
+      renderGoogleButton(containerId, intent);
+    } else if (attemptsLeft > 0) {
+      setTimeout(() => renderGoogleButtonWhenReady(containerId, intent, attemptsLeft - 1), 300);
     }
   }
 

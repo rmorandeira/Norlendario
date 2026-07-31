@@ -791,6 +791,11 @@ body.shared-route-mode .bottom-nav {
   height: 1px;
   background: var(--gridline);
 }
+.google-btn-container {
+  display: flex;
+  justify-content: center;
+  margin: 14px 0;
+}
 .gate-switch-mode {
   margin: 16px 0 0;
   color: var(--ink-2);
@@ -817,8 +822,8 @@ body.shared-route-mode .bottom-nav {
 }
 .gate-consent-label {
   display: flex;
-  align-items: center;
-  gap: 8px;
+  align-items: flex-start;
+  gap: 10px;
   margin-top: 4px;
   color: var(--ink-2);
   font-size: 0.82rem;
@@ -826,6 +831,7 @@ body.shared-route-mode .bottom-nav {
 }
 .gate-consent-label input {
   flex: 0 0 auto;
+  margin-top: 2px;
 }
 .gate-consent-label .gate-switch-link {
   font-size: inherit;

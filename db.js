@@ -128,6 +128,10 @@ if (!userColumns.includes("reset_token_expires_at")) {
   db.exec("ALTER TABLE users ADD COLUMN reset_token_expires_at TEXT");
 }
 db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_reset_token ON users(reset_token)");
+if (!userColumns.includes("google_id")) {
+  db.exec("ALTER TABLE users ADD COLUMN google_id TEXT");
+}
+db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)");
 
 // One-off migration from the old single-note-per-act act_comments table to
 // the threaded route_comments table (personal notes become the owner's
