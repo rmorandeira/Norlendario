@@ -44,6 +44,9 @@
     comments: new Map(), // actId -> comment thread (array), account-only like favorites
     hasUnreadComments: false, // someone else commented on my route since I last left the tab
     profile: { firstName: "", lastName: "", avatarPath: null },
+    people: null, // fetched lazily when the Gente tab is first opened
+    peopleSearch: "",
+    peopleSort: "name", // "name" | "favorites" | "attending"
     favoritesOnly: false,
     authMode: "login", // "login" | "signup"
     authError: null,
@@ -55,6 +58,8 @@
       '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M19 4h-1V2h-2v2H8V2H6v2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"/></svg>',
     route:
       '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M15 5.1 9 3 3 5v15.9l6-2.1 6 2.1 6-2V3l-6 2.1ZM15 19l-6-2.1V5l6 2.1V19Z"/></svg>',
+    people:
+      '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M9 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm0 2c-3.3 0-8 1.7-8 4.9V21h16v-2.1c0-3.2-4.7-4.9-8-4.9Zm8.5-3.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7ZM17 13.2c-.4 0-.8.02-1.24.07 1.6 1.06 2.74 2.5 2.74 4.23V21H23v-2.8c0-2.7-3.9-4-6-4Z"/></svg>',
     user:
       '<svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12 12c2.7 0 4.9-2.2 4.9-4.9S14.7 2.2 12 2.2 7.1 4.4 7.1 7.1 9.3 12 12 12Zm0 2.4c-3.3 0-9.8 1.6-9.8 4.9V22h19.6v-2.7c0-3.3-6.5-4.9-9.8-4.9Z"/></svg>'
   };
@@ -80,6 +85,7 @@
   const els = {
     calendarView: document.getElementById("calendarView"),
     routeView: document.getElementById("routeView"),
+    peopleView: document.getElementById("peopleView"),
     userView: document.getElementById("userView"),
     bottomNav: document.getElementById("bottomNav"),
     dayTabs: document.getElementById("dayTabs"),
@@ -989,7 +995,7 @@
   }
 
   function renderBottomNav() {
-    const labels = { calendar: "navCalendar", route: "navRoute", user: "navUser" };
+    const labels = { calendar: "navCalendar", route: "navRoute", people: "navPeople", user: "navUser" };
     els.bottomNav.innerHTML = Object.keys(NAV_ICONS)
       .map(
         (view) => `
@@ -1481,6 +1487,138 @@
     }
   }
 
+  // --- Gente: directory of registered users ---
+
+  function personFullName(p) {
+    return [p.firstName, p.lastName].filter(Boolean).join(" ").trim() || p.username;
+  }
+
+  function attendingCountText(lang, count) {
+    if (count === 0) return t(lang, "attendingConcertsCountZero");
+    return t(lang, count === 1 ? "attendingConcertsCountOne" : "attendingConcertsCount").replace("{count}", count);
+  }
+
+  function sortedFilteredPeople() {
+    const query = state.peopleSearch.trim().toLowerCase();
+    const all = state.people || [];
+    let list = query ? all.filter((p) => personFullName(p).toLowerCase().includes(query)) : all.slice();
+    if (state.peopleSort === "favorites") {
+      list.sort((a, b) => b.isFavorite - a.isFavorite || personFullName(a).localeCompare(personFullName(b)));
+    } else if (state.peopleSort === "attending") {
+      list.sort((a, b) => b.attendingCount - a.attendingCount || personFullName(a).localeCompare(personFullName(b)));
+    } else {
+      list.sort((a, b) => personFullName(a).localeCompare(personFullName(b)));
+    }
+    return list;
+  }
+
+  function peopleListHTML() {
+    const lang = state.lang;
+    if ((state.people || []).length === 0) return `<p class="empty-msg">${t(lang, "peopleEmptyMsg")}</p>`;
+    const list = sortedFilteredPeople();
+    if (list.length === 0) return `<p class="empty-msg">${t(lang, "peopleNoResults")}</p>`;
+    return list
+      .map((p) => {
+        const name = personFullName(p);
+        return `
+        <div class="people-row" data-id="${p.id}" data-token="${p.shareToken}" tabindex="0" role="button">
+          <span class="people-avatar">
+            ${p.avatarPath ? `<img src="${p.avatarPath}" alt="" />` : `<span class="avatar-placeholder">${escapeHtml(name[0].toUpperCase())}</span>`}
+          </span>
+          <span class="people-info">
+            <span class="people-name">${escapeHtml(name)}</span>
+            <span class="people-attending">${attendingCountText(lang, p.attendingCount)}</span>
+          </span>
+          <button type="button" class="star-btn people-fav-btn${p.isFavorite ? " is-fav" : ""}" data-id="${p.id}" aria-label="${t(lang, p.isFavorite ? "favoriteRemove" : "favoriteAdd")}">
+            <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round" d="M12 3.5l2.47 5.15 5.53.76-4 3.98.95 5.61L12 16.3l-4.95 2.7.95-5.61-4-3.98 5.53-.76z"/></svg>
+          </button>
+        </div>`;
+      })
+      .join("");
+  }
+
+  function wirePeopleList() {
+    const container = document.getElementById("peopleList");
+    if (!container) return;
+    container.querySelectorAll(".people-row").forEach((row) => {
+      const go = () => (window.location.href = "/ruta/" + row.dataset.token);
+      row.addEventListener("click", go);
+      row.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          go();
+        }
+      });
+    });
+    container.querySelectorAll(".people-fav-btn").forEach((btn) => {
+      btn.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        const id = Number(btn.dataset.id);
+        const person = (state.people || []).find((p) => p.id === id);
+        if (!person) return;
+        person.isFavorite = !person.isFavorite;
+        renderPeopleList();
+        try {
+          if (person.isFavorite) await Api.favoritePerson(id);
+          else await Api.unfavoritePerson(id);
+        } catch {
+          person.isFavorite = !person.isFavorite;
+          renderPeopleList();
+        }
+      });
+    });
+  }
+
+  function renderPeopleList() {
+    const container = document.getElementById("peopleList");
+    if (!container) return;
+    container.innerHTML = peopleListHTML();
+    wirePeopleList();
+  }
+
+  async function renderPeopleView() {
+    const lang = state.lang;
+
+    if (isGuest()) {
+      els.peopleView.innerHTML = `
+        <div class="page-inner">
+          <h2>${t(lang, "peopleTitle")}</h2>
+          <p class="empty-msg">${t(lang, "peopleGuestMsg")}</p>
+          <button class="guest-btn" id="peopleLoginBtn">${t(lang, "loginBtn")}</button>
+        </div>`;
+      document.getElementById("peopleLoginBtn").addEventListener("click", handleLogout);
+      return;
+    }
+
+    els.peopleView.innerHTML = `
+      <div class="page-inner">
+        <div class="route-header-text">
+          <h2>${t(lang, "peopleTitle")}</h2>
+          <p class="page-subtitle">${t(lang, "routeSubtitle")}</p>
+        </div>
+        <div class="people-toolbar">
+          <input type="text" class="people-search-input" id="peopleSearchInput" placeholder="${t(lang, "peopleSearchPlaceholder")}" value="${escapeHtml(state.peopleSearch)}" />
+          <button type="button" class="people-sort-btn" id="peopleSortBtn" aria-label="Ordenar">
+            <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M3 6h12v2H3V6Zm0 5h8v2H3v-2Zm0 5h4v2H3v-2ZM19 4v12.2l3-3 1.4 1.4L18 20l-5.4-5.4L14 13.2l3 3V4h2Z"/></svg>
+          </button>
+        </div>
+        <div class="people-list" id="peopleList"><p class="empty-msg">${t(lang, "extraLoading")}</p></div>
+      </div>`;
+
+    document.getElementById("peopleSearchInput").addEventListener("input", (e) => {
+      state.peopleSearch = e.target.value;
+      renderPeopleList();
+    });
+    document.getElementById("peopleSortBtn").addEventListener("click", () => {
+      const order = ["name", "attending", "favorites"];
+      state.peopleSort = order[(order.indexOf(state.peopleSort) + 1) % order.length];
+      renderPeopleList();
+    });
+
+    state.people = await Api.getPeople();
+    renderPeopleList();
+  }
+
   function renderUserView() {
     const lang = state.lang;
     const guest = isGuest();
@@ -1633,6 +1771,7 @@
     renderBottomNav();
     els.calendarView.style.display = state.activeView === "calendar" ? "" : "none";
     els.routeView.style.display = state.activeView === "route" ? "" : "none";
+    els.peopleView.style.display = state.activeView === "people" ? "" : "none";
     els.userView.style.display = state.activeView === "user" ? "" : "none";
 
     if (state.activeView === "calendar") {
@@ -1643,6 +1782,8 @@
       renderTba(day);
     } else if (state.activeView === "route") {
       renderRouteView();
+    } else if (state.activeView === "people") {
+      renderPeopleView();
     } else if (state.activeView === "user") {
       renderUserView();
     }

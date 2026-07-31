@@ -101,6 +101,17 @@ const Api = {
     if (!r.ok) throw new Error("upload_avatar_failed");
     return r.json();
   },
+  async getPeople() {
+    const r = await fetch("/api/people");
+    if (!r.ok) return [];
+    return r.json();
+  },
+  async favoritePerson(id) {
+    await fetch("/api/people/" + encodeURIComponent(id) + "/favorite", { method: "POST" });
+  },
+  async unfavoritePerson(id) {
+    await fetch("/api/people/" + encodeURIComponent(id) + "/favorite", { method: "DELETE" });
+  },
   async getShareLink() {
     const r = await fetch("/api/share-link");
     if (!r.ok) return null;

@@ -74,6 +74,13 @@ db.exec(`
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
   );
   CREATE INDEX IF NOT EXISTS idx_route_comments_owner ON route_comments(owner_id);
+
+  CREATE TABLE IF NOT EXISTS people_favorites (
+    follower_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    followee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (follower_id, followee_id)
+  );
 `);
 
 // Drop columns from an older schema version, if this DB predates the switch

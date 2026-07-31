@@ -58,6 +58,18 @@ const getUserById = db.prepare(
 );
 const updateProfile = db.prepare("UPDATE users SET first_name = ?, last_name = ? WHERE id = ?");
 const updateAvatarPath = db.prepare("UPDATE users SET avatar_path = ? WHERE id = ?");
+const listPeople = db.prepare(`
+  SELECT u.id, u.username, u.first_name, u.last_name, u.avatar_path, u.share_token,
+         COUNT(f.id) AS attending_count
+  FROM users u
+  LEFT JOIN favorites f ON f.user_id = u.id
+  WHERE u.id != ?
+  GROUP BY u.id
+  ORDER BY u.username COLLATE NOCASE
+`);
+const listPeopleFavoriteIds = db.prepare("SELECT followee_id FROM people_favorites WHERE follower_id = ?");
+const addPeopleFavorite = db.prepare("INSERT OR IGNORE INTO people_favorites (follower_id, followee_id) VALUES (?, ?)");
+const removePeopleFavorite = db.prepare("DELETE FROM people_favorites WHERE follower_id = ? AND followee_id = ?");
 const setShareToken = db.prepare("UPDATE users SET share_token = ? WHERE id = ?");
 const markCommentsSeen = db.prepare("UPDATE users SET last_seen_comments_at = datetime('now') WHERE id = ?");
 const findUserByShareToken = db.prepare("SELECT id, username FROM users WHERE share_token = ?");
@@ -232,6 +244,37 @@ app.post("/api/profile/avatar", requireAuth, (req, res) => {
   res.json({ avatarPath });
 });
 
+// --- Gente: directory of registered users, public to any signed-in account
+// (see the share-link token comment above — this is the one place that
+// deliberately makes routes discoverable without the exact link) ---
+
+app.get("/api/people", requireAuth, (req, res) => {
+  const rows = listPeople.all(req.session.userId);
+  const favoriteIds = new Set(listPeopleFavoriteIds.all(req.session.userId).map((r) => r.followee_id));
+  res.json(
+    rows.map((r) => ({
+      id: r.id,
+      username: r.username,
+      firstName: r.first_name || "",
+      lastName: r.last_name || "",
+      avatarPath: r.avatar_path || null,
+      attendingCount: r.attending_count,
+      shareToken: ensureShareToken(r.id, r.share_token),
+      isFavorite: favoriteIds.has(r.id)
+    }))
+  );
+});
+
+app.post("/api/people/:id/favorite", requireAuth, (req, res) => {
+  addPeopleFavorite.run(req.session.userId, req.params.id);
+  res.status(201).json({ ok: true });
+});
+
+app.delete("/api/people/:id/favorite", requireAuth, (req, res) => {
+  removePeopleFavorite.run(req.session.userId, req.params.id);
+  res.status(204).end();
+});
+
 app.get("/api/favorites", requireAuth, (req, res) => {
   const rows = listFavorites.all(req.session.userId);
   res.json(rows.map((r) => r.act_id));
@@ -313,14 +356,16 @@ app.post("/api/comments/mark-read", requireAuth, (req, res) => {
 // --- Sharing a route publicly: anyone with the link can view it and add
 // their own comments, but can only edit/delete comments they authored ---
 
+function ensureShareToken(userId, currentToken) {
+  if (currentToken) return currentToken;
+  const token = crypto.randomBytes(9).toString("base64url");
+  setShareToken.run(token, userId);
+  return token;
+}
+
 app.get("/api/share-link", requireAuth, (req, res) => {
   const user = getUserById.get(req.session.userId);
-  let token = user.share_token;
-  if (!token) {
-    token = crypto.randomBytes(9).toString("base64url");
-    setShareToken.run(token, req.session.userId);
-  }
-  res.json({ token });
+  res.json({ token: ensureShareToken(req.session.userId, user.share_token) });
 });
 
 app.get("/api/shared/:token", (req, res) => {

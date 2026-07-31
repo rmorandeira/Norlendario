@@ -666,6 +666,7 @@ body.gate-open main {
 body.shared-route-mode .top,
 body.shared-route-mode #calendarView,
 body.shared-route-mode #routeView,
+body.shared-route-mode #peopleView,
 body.shared-route-mode #userView,
 body.shared-route-mode .bottom-nav {
   display: none;
@@ -951,6 +952,98 @@ body.shared-route-mode .bottom-nav {
   background: var(--surface);
   border: 2px solid var(--page);
   font-size: 0.9rem;
+}
+
+.people-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 8px 0 20px;
+}
+.people-search-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.9rem;
+}
+.people-sort-btn {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.people-list {
+  display: flex;
+  flex-direction: column;
+}
+.people-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--gridline);
+  cursor: pointer;
+}
+.people-avatar {
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--gridline);
+}
+.people-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.people-avatar .avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  font-weight: 700;
+  color: var(--ink-muted);
+}
+.people-info {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.people-name {
+  font-weight: 700;
+  font-size: 1.05rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.people-attending {
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+}
+.people-fav-btn {
+  position: static;
+  flex: 0 0 auto;
+  width: 32px;
+  height: 32px;
 }
 
 .mode-switch {
