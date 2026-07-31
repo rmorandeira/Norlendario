@@ -1189,6 +1189,14 @@
           </button>
         </div>
       </div>
+      <div class="settings-row route-visibility-row">
+        <span>${t(lang, "routePublicLabel")}</span>
+        <button class="mode-switch" id="routePublicToggleBtn" role="switch" aria-checked="${Boolean(state.profile.routePublic)}" aria-label="${t(lang, "routePublicLabel")}">
+          <span class="mode-switch-dot"></span>
+          <span class="mode-switch-label">${state.profile.routePublic ? t(lang, "visibilityOn") : t(lang, "visibilityOff")}</span>
+        </button>
+      </div>
+      <p class="route-visibility-hint">${t(lang, "routePublicHint")}</p>
       ${listHTML}
     </div>`;
     els.routeView.innerHTML = html;
@@ -1205,6 +1213,17 @@
       if (container) wireCommentThread(container, routeCommentOps(idx));
     });
 
+    document.getElementById("routePublicToggleBtn").addEventListener("click", async () => {
+      const next = !state.profile.routePublic;
+      state.profile.routePublic = next;
+      renderRouteView();
+      try {
+        await Api.updateVisibility({ routePublic: next });
+      } catch {
+        state.profile.routePublic = !next;
+        renderRouteView();
+      }
+    });
     document.getElementById("routeShareBtn").addEventListener("click", async (e) => {
       const btn = e.currentTarget;
       const original = btn.innerHTML;
@@ -1652,8 +1671,9 @@
     return list
       .map((p) => {
         const name = personFullName(p);
+        const clickable = Boolean(p.shareToken);
         return `
-        <div class="people-row" data-id="${p.id}" data-token="${p.shareToken}" tabindex="0" role="button">
+        <div class="people-row${clickable ? "" : " people-row-private"}" data-id="${p.id}" data-token="${p.shareToken || ""}"${clickable ? ` tabindex="0" role="button"` : ""}>
           <span class="people-avatar">
             ${p.avatarPath ? `<img src="${p.avatarPath}" alt="" />` : `<span class="avatar-placeholder">${escapeHtml(name[0].toUpperCase())}</span>`}
           </span>
@@ -1672,7 +1692,7 @@
   function wirePeopleList() {
     const container = document.getElementById("peopleList");
     if (!container) return;
-    container.querySelectorAll(".people-row").forEach((row) => {
+    container.querySelectorAll(".people-row:not(.people-row-private)").forEach((row) => {
       const go = () => (window.location.href = "/ruta/" + row.dataset.token);
       row.addEventListener("click", go);
       row.addEventListener("keydown", (e) => {
@@ -1817,6 +1837,14 @@
                  <button type="button" class="gate-switch-link" id="startPasswordChangeBtn">${t(lang, "changePasswordBtn")}</button>
                </div>`
         }
+        <div class="settings-row">
+          <span>${t(lang, "peopleVisibleLabel")}</span>
+          <button class="mode-switch" id="peopleVisibleToggleBtn" role="switch" aria-checked="${Boolean(state.profile.peopleVisible)}" aria-label="${t(lang, "peopleVisibleLabel")}">
+            <span class="mode-switch-dot"></span>
+            <span class="mode-switch-label">${state.profile.peopleVisible ? t(lang, "visibilityOn") : t(lang, "visibilityOff")}</span>
+          </button>
+        </div>
+        <p class="gdpr-export-row">${t(lang, "peopleVisibleHint")}</p>
         <p class="gdpr-export-row">${t(lang, "gdprExportText")} <a class="gate-switch-link" href="/api/profile/export">${t(lang, "gdprExportLink")}</a></p>`
         }
 
@@ -1877,6 +1905,17 @@
     if (guest) {
       document.getElementById("userLoginBtn").addEventListener("click", handleLogout);
     } else {
+      document.getElementById("peopleVisibleToggleBtn").addEventListener("click", async () => {
+        const next = !state.profile.peopleVisible;
+        state.profile.peopleVisible = next;
+        renderUserView();
+        try {
+          await Api.updateVisibility({ peopleVisible: next });
+        } catch {
+          state.profile.peopleVisible = !next;
+          renderUserView();
+        }
+      });
       document.getElementById("userLogoutBtn").addEventListener("click", handleLogout);
       document.getElementById("userDeleteBtn").addEventListener("click", () => {
         state.confirmingDelete = true;

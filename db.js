@@ -132,6 +132,16 @@ if (!userColumns.includes("google_id")) {
   db.exec("ALTER TABLE users ADD COLUMN google_id TEXT");
 }
 db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_google_id ON users(google_id)");
+// route_public: whether this user's route can be opened from Gente (the
+// explicit share-link/token flow is unaffected either way). people_visible:
+// whether the user shows up in Gente at all. Both default to 1 to match
+// pre-existing behavior for accounts created before these switches existed.
+if (!userColumns.includes("route_public")) {
+  db.exec("ALTER TABLE users ADD COLUMN route_public INTEGER NOT NULL DEFAULT 1");
+}
+if (!userColumns.includes("people_visible")) {
+  db.exec("ALTER TABLE users ADD COLUMN people_visible INTEGER NOT NULL DEFAULT 1");
+}
 
 // One-off migration from the old single-note-per-act act_comments table to
 // the threaded route_comments table (personal notes become the owner's

@@ -132,6 +132,15 @@ const Api = {
     const data = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error(data.error || "update_password_failed");
   },
+  async updateVisibility(fields) {
+    const r = await fetch("/api/profile/visibility", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(fields)
+    });
+    if (!r.ok) throw new Error("update_visibility_failed");
+    return r.json();
+  },
   async uploadAvatar(imageDataUrl) {
     const r = await fetch("/api/profile/avatar", {
       method: "POST",

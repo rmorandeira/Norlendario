@@ -1119,6 +1119,9 @@ body.shared-route-mode .bottom-nav {
   border-bottom: 1px solid var(--gridline);
   cursor: pointer;
 }
+.people-row-private {
+  cursor: default;
+}
 .people-avatar {
   flex: 0 0 auto;
   width: 52px;
@@ -1268,6 +1271,17 @@ body.shared-route-mode .bottom-nav {
   display: flex;
   gap: 8px;
   margin-top: 8px;
+}
+.route-visibility-row {
+  margin-top: 8px;
+  border-bottom: none;
+  padding: 10px 0;
+}
+.route-visibility-hint {
+  margin: -6px 0 20px;
+  color: var(--ink-muted);
+  font-size: 0.8rem;
+  line-height: 1.5;
 }
 .route-icon-btn {
   width: 40px;

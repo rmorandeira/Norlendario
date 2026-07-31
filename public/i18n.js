@@ -168,6 +168,13 @@ const I18N = {
     deleteAccountConfirmBtn: "Sí, eliminar cuenta",
     cancelBtn: "Cancelar",
 
+    routePublicLabel: "Ruta visible en Gente",
+    routePublicHint: "Si está activado, cualquier persona registrada puede abrir tu ruta desde la sección Gente. Si lo desactivas, solo se podrá ver con el enlace que compartas tú.",
+    peopleVisibleLabel: "Visible en Gente",
+    peopleVisibleHint: "Si lo desactivas, no aparecerás en la lista de asistentes de nadie.",
+    visibilityOn: "Sí",
+    visibilityOff: "No",
+
     shareBtn: "Compartir",
     shareInstagramBtn: "Compartir en Instagram",
     generatingImage: "Generando…",
@@ -355,6 +362,13 @@ const I18N = {
     deleteAccountConfirm: "Are you sure you want to delete your account? Your user and favorites will be permanently removed.",
     deleteAccountConfirmBtn: "Yes, delete my account",
     cancelBtn: "Cancel",
+
+    routePublicLabel: "Route visible in Gente",
+    routePublicHint: "When on, any registered user can open your route from the Gente section. When off, it's only viewable through a link you share yourself.",
+    peopleVisibleLabel: "Visible in Gente",
+    peopleVisibleHint: "When off, you won't show up in anyone's attendee list.",
+    visibilityOn: "Yes",
+    visibilityOff: "No",
 
     shareBtn: "Share",
     shareInstagramBtn: "Share to Instagram",

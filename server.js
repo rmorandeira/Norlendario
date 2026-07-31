@@ -73,16 +73,18 @@ const removeFavorite = db.prepare(
 );
 const deleteUser = db.prepare("DELETE FROM users WHERE id = ?");
 const getUserById = db.prepare(
-  "SELECT id, username, email, share_token, last_seen_comments_at, first_name, last_name, avatar_path, password_hash FROM users WHERE id = ?"
+  "SELECT id, username, email, share_token, last_seen_comments_at, first_name, last_name, avatar_path, password_hash, route_public, people_visible FROM users WHERE id = ?"
 );
 const updateProfile = db.prepare("UPDATE users SET first_name = ?, last_name = ?, email = ? WHERE id = ?");
 const updateAvatarPath = db.prepare("UPDATE users SET avatar_path = ? WHERE id = ?");
+const updateRoutePublic = db.prepare("UPDATE users SET route_public = ? WHERE id = ?");
+const updatePeopleVisible = db.prepare("UPDATE users SET people_visible = ? WHERE id = ?");
 const listPeople = db.prepare(`
-  SELECT u.id, u.username, u.first_name, u.last_name, u.avatar_path, u.share_token,
+  SELECT u.id, u.username, u.first_name, u.last_name, u.avatar_path, u.share_token, u.route_public,
          COUNT(f.id) AS attending_count
   FROM users u
   LEFT JOIN favorites f ON f.user_id = u.id
-  WHERE u.id != ?
+  WHERE u.id != ? AND u.people_visible = 1
   GROUP BY u.id
   ORDER BY u.username COLLATE NOCASE
 `);
@@ -391,7 +393,9 @@ function serializeProfile(user) {
     email: user.email || "",
     firstName: user.first_name || "",
     lastName: user.last_name || "",
-    avatarPath: user.avatar_path || null
+    avatarPath: user.avatar_path || null,
+    routePublic: Boolean(user.route_public),
+    peopleVisible: Boolean(user.people_visible)
   };
 }
 
@@ -415,6 +419,22 @@ app.put("/api/profile", requireAuth, (req, res) => {
     throw err;
   }
   res.json({ firstName, lastName, email });
+});
+
+// Two independent visibility switches: routePublic controls whether Gente
+// can open this user's route at all (the explicit share-link/token stays
+// usable either way); peopleVisible controls whether the user shows up in
+// Gente in the first place. Both accepted in one call since they're both
+// simple flags on the same profile settings screen area.
+app.put("/api/profile/visibility", requireAuth, (req, res) => {
+  const userId = req.session.userId;
+  if (typeof req.body.routePublic === "boolean") {
+    updateRoutePublic.run(req.body.routePublic ? 1 : 0, userId);
+  }
+  if (typeof req.body.peopleVisible === "boolean") {
+    updatePeopleVisible.run(req.body.peopleVisible ? 1 : 0, userId);
+  }
+  res.json(serializeProfile(getUserById.get(userId)));
 });
 
 app.put("/api/profile/password", requireAuth, (req, res) => {
@@ -495,7 +515,8 @@ app.get("/api/profile/export", requireAuth, (req, res) => {
 
 // --- Gente: directory of registered users, public to any signed-in account
 // (see the share-link token comment above — this is the one place that
-// deliberately makes routes discoverable without the exact link) ---
+// deliberately makes routes discoverable without the exact link, and only
+// for accounts that opted into that via route_public) ---
 
 app.get("/api/people", requireAuth, (req, res) => {
   const rows = listPeople.all(req.session.userId);
@@ -508,7 +529,8 @@ app.get("/api/people", requireAuth, (req, res) => {
       lastName: r.last_name || "",
       avatarPath: r.avatar_path || null,
       attendingCount: r.attending_count,
-      shareToken: ensureShareToken(r.id, r.share_token),
+      routePublic: Boolean(r.route_public),
+      shareToken: r.route_public ? ensureShareToken(r.id, r.share_token) : null,
       isFavorite: favoriteIds.has(r.id)
     }))
   );
