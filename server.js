@@ -65,9 +65,9 @@ const removeFavorite = db.prepare(
 );
 const deleteUser = db.prepare("DELETE FROM users WHERE id = ?");
 const getUserById = db.prepare(
-  "SELECT id, username, share_token, last_seen_comments_at, first_name, last_name, avatar_path FROM users WHERE id = ?"
+  "SELECT id, username, email, share_token, last_seen_comments_at, first_name, last_name, avatar_path, password_hash FROM users WHERE id = ?"
 );
-const updateProfile = db.prepare("UPDATE users SET first_name = ?, last_name = ? WHERE id = ?");
+const updateProfile = db.prepare("UPDATE users SET first_name = ?, last_name = ?, email = ? WHERE id = ?");
 const updateAvatarPath = db.prepare("UPDATE users SET avatar_path = ? WHERE id = ?");
 const listPeople = db.prepare(`
   SELECT u.id, u.username, u.first_name, u.last_name, u.avatar_path, u.share_token,
@@ -108,6 +108,17 @@ function requireAuth(req, res, next) {
     return res.status(401).json({ error: "unauthenticated" });
   }
   next();
+}
+
+// Tries base2, base3, ... first (reads better than random digits), then
+// falls back to a random suffix if the first handful are somehow all taken.
+function suggestUsername(base) {
+  const trimmedBase = base.slice(0, 28);
+  for (let i = 2; i <= 20; i++) {
+    const candidate = `${trimmedBase}${i}`;
+    if (!findUserByUsername.get(candidate)) return candidate;
+  }
+  return `${trimmedBase}${Math.floor(1000 + Math.random() * 9000)}`;
 }
 
 function requireAdmin(req, res, next) {
@@ -197,7 +208,7 @@ app.post("/api/auth/signup", (req, res) => {
     }).lastInsertRowid;
   } catch (err) {
     if (String(err.message).includes("users.username")) {
-      return res.status(409).json({ error: "username_taken" });
+      return res.status(409).json({ error: "username_taken", suggestion: suggestUsername(username) });
     }
     if (String(err.message).includes("users.email")) {
       return res.status(409).json({ error: "email_taken" });
@@ -282,6 +293,7 @@ app.delete("/api/auth/account", requireAuth, (req, res) => {
 function serializeProfile(user) {
   return {
     username: user.username,
+    email: user.email || "",
     firstName: user.first_name || "",
     lastName: user.last_name || "",
     avatarPath: user.avatar_path || null
@@ -295,8 +307,33 @@ app.get("/api/profile", requireAuth, (req, res) => {
 app.put("/api/profile", requireAuth, (req, res) => {
   const firstName = String(req.body.firstName || "").trim().slice(0, 60);
   const lastName = String(req.body.lastName || "").trim().slice(0, 60);
-  updateProfile.run(firstName, lastName, req.session.userId);
-  res.json({ firstName, lastName });
+  const email = String(req.body.email || "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: "invalid_email" });
+  }
+  try {
+    updateProfile.run(firstName, lastName, email, req.session.userId);
+  } catch (err) {
+    if (String(err.message).includes("users.email")) {
+      return res.status(409).json({ error: "email_taken" });
+    }
+    throw err;
+  }
+  res.json({ firstName, lastName, email });
+});
+
+app.put("/api/profile/password", requireAuth, (req, res) => {
+  const currentPassword = String(req.body.currentPassword || "");
+  const newPassword = String(req.body.newPassword || "");
+  if (newPassword.length < 4) {
+    return res.status(400).json({ error: "password_length" });
+  }
+  const user = getUserById.get(req.session.userId);
+  if (!bcrypt.compareSync(currentPassword, user.password_hash)) {
+    return res.status(401).json({ error: "invalid_current_password" });
+  }
+  setPasswordHash.run(bcrypt.hashSync(newPassword, 10), user.id);
+  res.status(204).end();
 });
 
 app.post("/api/profile/avatar", requireAuth, (req, res) => {

@@ -47,13 +47,16 @@
     favCounts: new Map(), // actId -> public aggregate favorite count, visible to guests too
     comments: new Map(), // actId -> comment thread (array), account-only like favorites
     hasUnreadComments: false, // someone else commented on my route since I last left the tab
-    profile: { firstName: "", lastName: "", avatarPath: null },
+    profile: { firstName: "", lastName: "", email: "", avatarPath: null },
+    changingPassword: false,
+    passwordChangeError: null,
     people: null, // fetched lazily when the Gente tab is first opened
     peopleSearch: "",
     peopleSort: "name", // "name" | "favorites" | "attending"
     favoritesOnly: false,
     authMode: "login", // "login" | "signup" | "forgot"
     authError: null,
+    usernameSuggestion: null,
     forgotPasswordSent: false,
     confirmingDelete: false
   };
@@ -1769,13 +1772,35 @@
           <input type="text" class="settings-input" id="lastNameInput" maxlength="60" placeholder="${t(lang, "lastNameLabel")}" value="${escapeHtml(state.profile.lastName || "")}" />
         </div>
         <div class="settings-row">
+          <span>${t(lang, "emailFieldLabel")}</span>
+          <input type="email" class="settings-input" id="emailInput" placeholder="${t(lang, "emailFieldLabel")}" value="${escapeHtml(state.profile.email || "")}" />
+        </div>
+        <div class="settings-row">
           <span>${t(lang, "usernameLabel")}</span>
           <span class="settings-value">${state.user}</span>
         </div>
-        <div class="settings-row">
-          <span>${t(lang, "passwordFieldLabel")}</span>
-          <span class="settings-value settings-value-muted">••••••••••••</span>
-        </div>`
+        ${
+          state.changingPassword
+            ? `<div class="password-change-block">
+                 <form id="passwordChangeForm" novalidate>
+                   <label>${t(lang, "currentPasswordLabel")}
+                     <input type="password" name="currentPassword" autocomplete="current-password" required minlength="4" />
+                   </label>
+                   <label>${t(lang, "newPasswordFieldLabel")}
+                     <input type="password" name="newPassword" autocomplete="new-password" required minlength="4" />
+                   </label>
+                   ${state.passwordChangeError ? `<p class="auth-error">${state.passwordChangeError}</p>` : ""}
+                   <div class="comment-form-actions">
+                     <button type="submit" class="comment-save-btn">${t(lang, "saveBtn")}</button>
+                     <button type="button" class="comment-cancel-btn" id="cancelPasswordChangeBtn">${t(lang, "cancelBtn")}</button>
+                   </div>
+                 </form>
+               </div>`
+            : `<div class="settings-row">
+                 <span>${t(lang, "passwordFieldLabel")}</span>
+                 <button type="button" class="gate-switch-link" id="startPasswordChangeBtn">${t(lang, "changePasswordBtn")}</button>
+               </div>`
+        }`
         }
 
         <div class="settings-row">
@@ -1850,20 +1875,56 @@
 
       const firstNameInput = document.getElementById("firstNameInput");
       const lastNameInput = document.getElementById("lastNameInput");
-      const saveProfileNames = async () => {
+      const emailInput = document.getElementById("emailInput");
+      const saveProfileFields = async () => {
         const firstName = firstNameInput.value.trim();
         const lastName = lastNameInput.value.trim();
-        if (firstName === state.profile.firstName && lastName === state.profile.lastName) return;
+        const email = emailInput.value.trim();
+        if (firstName === state.profile.firstName && lastName === state.profile.lastName && email === state.profile.email) return;
+        const previousEmail = state.profile.email;
         state.profile.firstName = firstName;
         state.profile.lastName = lastName;
+        state.profile.email = email;
         try {
-          await Api.updateProfile(firstName, lastName);
+          await Api.updateProfile(firstName, lastName, email);
         } catch {
-          /* best-effort; the fields keep their edited value client-side either way */
+          // Revert just the email on failure (e.g. taken/invalid) — the
+          // name fields always succeed since the server doesn't validate them.
+          state.profile.email = previousEmail;
+          emailInput.value = previousEmail;
         }
       };
-      firstNameInput.addEventListener("blur", saveProfileNames);
-      lastNameInput.addEventListener("blur", saveProfileNames);
+      firstNameInput.addEventListener("blur", saveProfileFields);
+      lastNameInput.addEventListener("blur", saveProfileFields);
+      emailInput.addEventListener("blur", saveProfileFields);
+
+      if (state.changingPassword) {
+        document.getElementById("passwordChangeForm").addEventListener("submit", async (e) => {
+          e.preventDefault();
+          try {
+            await Api.updatePassword(e.target.currentPassword.value, e.target.newPassword.value);
+            state.changingPassword = false;
+            state.passwordChangeError = null;
+          } catch (err) {
+            state.passwordChangeError = t(
+              lang,
+              err.message === "invalid_current_password" ? "errCurrentPasswordWrong" : "errGeneric"
+            );
+          }
+          renderUserView();
+        });
+        document.getElementById("cancelPasswordChangeBtn").addEventListener("click", () => {
+          state.changingPassword = false;
+          state.passwordChangeError = null;
+          renderUserView();
+        });
+      } else {
+        document.getElementById("startPasswordChangeBtn").addEventListener("click", () => {
+          state.changingPassword = true;
+          state.passwordChangeError = null;
+          renderUserView();
+        });
+      }
 
       const avatarFileInput = document.getElementById("avatarFileInput");
       document.getElementById("avatarBtn").addEventListener("click", () => avatarFileInput.click());
@@ -1946,6 +2007,11 @@
           </label>
           ${state.authError ? `<p class="auth-error">${state.authError}</p>` : ""}
           ${
+            state.usernameSuggestion
+              ? `<p class="auth-suggestion">${t(lang, "usernameSuggestionPrompt")} <button type="button" class="gate-switch-link" id="applyUsernameSuggestionBtn">${escapeHtml(state.usernameSuggestion)}</button>?</p>`
+              : ""
+          }
+          ${
             isSignup
               ? `<div class="gate-form-actions">
                    <button type="button" class="guest-btn" id="cancelSignupBtn">${t(lang, "cancelBtn")}</button>
@@ -1957,9 +2023,6 @@
         ${
           isSignup
             ? `<div class="gate-warning">
-                 <p>${t(lang, "signupWarning1")}</p>
-                 <p>${t(lang, "signupWarning2")}</p>
-                 <p>${t(lang, "signupWarning3")}</p>
                  <label class="gate-consent-label">
                    <input type="checkbox" id="privacyConsentCheckbox" />
                    <span>${t(lang, "privacyConsentLabel").replace("{link}", `<button type="button" class="gate-switch-link" id="openPrivacyPolicyBtn">${t(lang, "privacyPolicyLink")}</button>`)}</span>
@@ -2011,9 +2074,19 @@
       document.getElementById("cancelSignupBtn").addEventListener("click", () => {
         state.authMode = "login";
         state.authError = null;
+        state.usernameSuggestion = null;
         renderGate();
       });
       document.getElementById("openPrivacyPolicyBtn").addEventListener("click", openLegalView);
+      const suggestionBtn = document.getElementById("applyUsernameSuggestionBtn");
+      if (suggestionBtn) {
+        suggestionBtn.addEventListener("click", () => {
+          document.getElementById("authForm").username.value = state.usernameSuggestion;
+          state.authError = null;
+          state.usernameSuggestion = null;
+          renderGate();
+        });
+      }
     } else {
       document.getElementById("guestBtn").addEventListener("click", handleGuestLogin);
       document.getElementById("switchToSignupBtn").addEventListener("click", () => {
@@ -2065,10 +2138,12 @@
       state.hasUnreadComments = hasAnyUnreadComment(state.comments);
       state.profile = (await Api.getProfile()) || state.profile;
       state.authError = null;
+      state.usernameSuggestion = null;
       hideGate();
       renderAll();
     } catch (err) {
       state.authError = authErrorMessage(err);
+      state.usernameSuggestion = err.suggestion || null;
       renderGate();
     }
   }

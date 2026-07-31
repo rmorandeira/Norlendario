@@ -10,7 +10,11 @@ const Api = {
       body: JSON.stringify({ username, password, email, acceptedPrivacyPolicy })
     });
     const data = await r.json();
-    if (!r.ok) throw new Error(data.error || "generic");
+    if (!r.ok) {
+      const err = new Error(data.error || "generic");
+      err.suggestion = data.suggestion || null;
+      throw err;
+    }
     return data;
   },
   async login(username, password) {
@@ -99,14 +103,24 @@ const Api = {
     if (!r.ok) return null;
     return r.json();
   },
-  async updateProfile(firstName, lastName) {
+  async updateProfile(firstName, lastName, email) {
     const r = await fetch("/api/profile", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ firstName, lastName })
+      body: JSON.stringify({ firstName, lastName, email })
     });
-    if (!r.ok) throw new Error("update_profile_failed");
-    return r.json();
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || "update_profile_failed");
+    return data;
+  },
+  async updatePassword(currentPassword, newPassword) {
+    const r = await fetch("/api/profile/password", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ currentPassword, newPassword })
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || "update_password_failed");
   },
   async uploadAvatar(imageDataUrl) {
     const r = await fetch("/api/profile/avatar", {
