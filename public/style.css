@@ -290,7 +290,7 @@ main {
   z-index: 2;
   display: flex;
   align-items: flex-start;
-  justify-content: flex-end;
+  justify-content: flex-start;
   gap: 6px;
   padding: 8px 10px;
   background: var(--surface);
@@ -308,7 +308,7 @@ main {
 .stage-label span {
   white-space: normal;
   overflow-wrap: break-word;
-  text-align: right;
+  text-align: left;
 }
 
 .stage-track {
