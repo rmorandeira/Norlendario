@@ -103,6 +103,18 @@
     return new Map(Object.entries(obj || {}));
   }
 
+  function formatCommentMeta(lang, updatedAt) {
+    if (!updatedAt) return "";
+    const d = new Date(updatedAt.replace(" ", "T") + "Z");
+    if (isNaN(d)) return "";
+    const day = d.getDate();
+    const month = d.toLocaleDateString(lang === "en" ? "en-US" : "es-ES", { month: "short" }).replace(".", "");
+    const monthCap = month.charAt(0).toUpperCase() + month.slice(1);
+    const hh = String(d.getHours()).padStart(2, "0");
+    const mm = String(d.getMinutes()).padStart(2, "0");
+    return `${day} ${monthCap} ${hh}:${mm} · ${state.user}`;
+  }
+
   function isGuest() {
     return state.user === "guest";
   }
@@ -448,15 +460,15 @@
       <div class="artist-view-inner">
         <button class="back-btn" id="backBtn">&larr; ${t(lang, "back")}</button>
         <div class="artist-card">
-          <div class="artist-card-header">
-            ${starHTML}
-            <span class="stage-pill" style="background:var(${STAGE_COLOR_VARS[act.stage]})">${act.stage}</span>
-          </div>
           <h2>${act.artist}</h2>
           <div class="event-meta">
-            <div class="event-date">${formatDayDate(lang, day)}</div>
+            <div class="event-meta-row">
+              <span class="event-date">${formatDayDate(lang, day)}</span>
+              <a class="event-venue" href="${mapsUrl(act.stage)}" target="_blank" rel="noopener noreferrer">
+                <i style="background:var(${STAGE_COLOR_VARS[act.stage]})"></i>${act.stage}
+              </a>
+            </div>
             <div class="event-time">${formatTimeForDisplay(lang, act)}</div>
-            <a class="event-venue" href="${mapsUrl(act.stage)}" target="_blank" rel="noopener noreferrer">${act.stage}</a>
           </div>
           <div class="artist-extra" id="artistExtra">${renderArtistExtraHTML()}</div>
           <div class="detail-actions">
@@ -467,6 +479,7 @@
             <button class="share-btn" id="shareArtistBtn" aria-label="${t(lang, "shareBtn")}">
               <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L7.04 9.81A3 3 0 1 0 6 15.5c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65a2.92 2.92 0 1 0 2.92-2.92Z"/></svg>
             </button>
+            ${starHTML}
           </div>
         </div>
       </div>
@@ -613,7 +626,7 @@
       }
       lines.push(`• ${formatTimeForDisplay(lang, act)} — ${act.artist} (${act.stage})`);
       const comment = state.comments.get(actId(day, act));
-      if (comment) lines.push(`   💬 "${comment}"`);
+      if (comment) lines.push(`   💬 "${comment.comment}"`);
     });
     lines.push("");
     lines.push(t(lang, "shareRouteFooter"));
@@ -799,7 +812,7 @@
         lastDayId = day.id;
       }
       const comment = state.comments.get(actId(day, act));
-      const commentLines = comment ? wrapCanvasText(mctx, comment, commentMaxWidth) : [];
+      const commentLines = comment ? wrapCanvasText(mctx, comment.comment, commentMaxWidth) : [];
       rows.push({ type: "act", act, commentLines });
     });
 
@@ -985,10 +998,17 @@
 
     let html = `<div class="page-inner">
       <div class="route-header">
-        <h2>${t(lang, "routeTitle")}</h2>
+        <div class="route-header-text">
+          <h2>${t(lang, "routeTitle")}</h2>
+          <p class="page-subtitle">${t(lang, "routeSubtitle")}</p>
+        </div>
         <div class="route-share-actions">
-          <button class="icon-btn" id="routeShareBtn">📤 ${t(lang, "shareBtn")}</button>
-          <button class="icon-btn" id="routeInstagramBtn">📸 ${t(lang, "shareInstagramBtn")}</button>
+          <button class="route-icon-btn" id="routeShareBtn" aria-label="${t(lang, "shareBtn")}" title="${t(lang, "shareBtn")}">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81a3 3 0 1 0-3-3c0 .24.04.47.09.7L7.04 9.81A3 3 0 1 0 6 15.5c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65a2.92 2.92 0 1 0 2.92-2.92Z"/></svg>
+          </button>
+          <button class="route-icon-btn" id="routeInstagramBtn" aria-label="${t(lang, "shareInstagramBtn")}" title="${t(lang, "shareInstagramBtn")}">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><path fill="currentColor" d="M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6Zm0 4.8A1.8 1.8 0 1 1 12 10.2a1.8 1.8 0 0 1 0 3.6ZM7 4h6.17L15 6h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h1L9.83 4H7Zm2.83 2L8 8H7v9h10V8h-2.83L12.5 6h-2.67Z"/></svg>
+          </button>
         </div>
       </div>`;
     let lastDayId = null;
@@ -999,7 +1019,9 @@
     items.forEach(({ day, act }, idx) => {
       const sameDay = day.id === lastDayId;
       if (!sameDay) {
+        if (lastDayId !== null) html += `</div>`;
         html += `<h3 class="route-day-heading">${formatDayDate(lang, day)}</h3>`;
+        html += `<div class="route-day-group">`;
       } else if (lastAct && lastAct.stage !== act.stage) {
         const connectorId = "routeConnector-" + idx;
         connectors.push({ id: connectorId, from: lastAct.stage, to: act.stage });
@@ -1024,7 +1046,7 @@
       lastDayId = day.id;
       lastAct = act;
     });
-    html += `</div>`;
+    html += `</div></div>`;
     els.routeView.innerHTML = html;
 
     els.routeView.querySelectorAll(".route-item").forEach((el) => {
@@ -1072,13 +1094,15 @@
     const lang = state.lang;
     const comment = state.comments.get(actId(item.day, item.act));
     if (comment) {
+      const meta = formatCommentMeta(lang, comment.updatedAt);
       return `
         <div class="comment-bubble">
-          <p>${escapeHtml(comment)}</p>
+          <p>${escapeHtml(comment.comment)}</p>
           <button class="comment-edit-btn" data-idx="${idx}" aria-label="${t(lang, "editCommentBtn")}">✏️</button>
-        </div>`;
+        </div>
+        ${meta ? `<div class="comment-meta">${meta}</div>` : ""}`;
     }
-    return `<button class="comment-add-btn" data-idx="${idx}">💬 ${t(lang, "addCommentBtn")}</button>`;
+    return `<button class="comment-add-btn" data-idx="${idx}">${t(lang, "addCommentBtn")}…</button>`;
   }
 
   function wireCommentBlock(idx) {
@@ -1106,7 +1130,8 @@
     const container = els.routeView.querySelector(`.route-comment[data-idx="${idx}"]`);
     if (!container) return;
     const lang = state.lang;
-    const current = state.comments.get(actId(item.day, item.act)) || "";
+    const existing = state.comments.get(actId(item.day, item.act));
+    const current = existing ? existing.comment : "";
     container.innerHTML = `
       <form class="comment-form">
         <textarea maxlength="200" placeholder="${t(lang, "commentPlaceholder")}">${escapeHtml(current)}</textarea>
@@ -1135,11 +1160,16 @@
     if (!item) return;
     const id = actId(item.day, item.act);
     const trimmed = text.trim();
-    if (trimmed) state.comments.set(id, trimmed);
+    const previous = state.comments.get(id);
+    if (trimmed) state.comments.set(id, { comment: trimmed, updatedAt: previous ? previous.updatedAt : null });
     else state.comments.delete(id);
     renderRouteCommentBlock(idx);
     try {
-      await Api.setComment(id, trimmed);
+      const result = await Api.setComment(id, trimmed);
+      if (trimmed && result) {
+        state.comments.set(id, result);
+        renderRouteCommentBlock(idx);
+      }
     } catch {
       /* best-effort; the comment stays client-side even if the request fails */
     }
@@ -1202,20 +1232,50 @@
     const lang = state.lang;
     const guest = isGuest();
     const isDark = effectiveTheme() === "dark";
-    const label = guest ? t(lang, "guestLabel") : state.user;
+    const isEn = lang === "en";
 
     els.userView.innerHTML = `
       <div class="page-inner">
-        <h2>${t(lang, "userTitle")}</h2>
-        <p class="user-current-name">${label}</p>
+        <div class="route-header-text">
+          <h2 class="app-name-heading">${t(lang, "appName")}</h2>
+          <p class="page-subtitle">${t(lang, "routeSubtitle")}</p>
+        </div>
+
+        ${
+          guest
+            ? ""
+            : `
+        <div class="settings-row">
+          <span>${t(lang, "usernameLabel")}</span>
+          <span class="settings-value">${state.user}</span>
+        </div>
+        <div class="settings-row">
+          <span>${t(lang, "passwordFieldLabel")}</span>
+          <span class="settings-value settings-value-muted">••••••••••••</span>
+        </div>`
+        }
 
         <div class="settings-row">
           <span>${t(lang, "languageLabel")}</span>
-          <button class="icon-btn" id="langToggleBtn">${t(lang, "langBtn")}</button>
+          <button class="toggle-switch${isEn ? " is-on" : ""}" id="langToggleBtn" role="switch" aria-checked="${isEn}" aria-label="${t(lang, "languageLabel")}">
+            <span class="toggle-knob"></span>
+          </button>
         </div>
         <div class="settings-row">
           <span>${t(lang, "themeLabel")}</span>
-          <button class="icon-btn" id="themeToggleBtn">${isDark ? "☀️" : "🌙"} ${t(lang, isDark ? "lightModeBtn" : "darkModeBtn")}</button>
+          <button class="toggle-switch${isDark ? " is-on" : ""}" id="themeToggleBtn" role="switch" aria-checked="${isDark}" aria-label="${t(lang, "themeLabel")}">
+            <span class="toggle-knob"></span>
+          </button>
+        </div>
+
+        <div class="about-block">
+          <p>${t(lang, "aboutP1")}</p>
+          <p>${t(lang, "aboutP2")}</p>
+          <p>${t(lang, "aboutP3")}</p>
+          <div class="kofi-container">
+            <a href="https://ko-fi.com/F1F41CM0Q" target="_blank" rel="noopener noreferrer"><img height="36" style="border:0;height:36px" src="https://storage.ko-fi.com/cdn/kofi3.png?v=6" alt="Buy Me a Coffee at ko-fi.com" /></a>
+          </div>
+          <p>${t(lang, "aboutContact").replace("{email}", '<a href="mailto:rmorandeira@gmail.com">rmorandeira@gmail.com</a>')}</p>
         </div>
 
         ${

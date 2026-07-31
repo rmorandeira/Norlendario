@@ -55,10 +55,12 @@ const Api = {
     return r.json();
   },
   async setComment(actId, comment) {
-    await fetch("/api/comments/" + encodeURIComponent(actId), {
+    const r = await fetch("/api/comments/" + encodeURIComponent(actId), {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ comment })
     });
+    if (r.status === 204) return null;
+    return r.json();
   }
 };

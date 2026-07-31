@@ -46,12 +46,13 @@ const removeFavorite = db.prepare(
   "DELETE FROM favorites WHERE user_id = ? AND act_id = ?"
 );
 const deleteUser = db.prepare("DELETE FROM users WHERE id = ?");
-const listComments = db.prepare("SELECT act_id, comment FROM act_comments WHERE user_id = ?");
+const listComments = db.prepare("SELECT act_id, comment, updated_at FROM act_comments WHERE user_id = ?");
 const upsertComment = db.prepare(`
   INSERT INTO act_comments (user_id, act_id, comment, updated_at)
   VALUES (@userId, @actId, @comment, datetime('now'))
   ON CONFLICT(user_id, act_id) DO UPDATE SET comment = excluded.comment, updated_at = excluded.updated_at
 `);
+const getComment = db.prepare("SELECT comment, updated_at FROM act_comments WHERE user_id = ? AND act_id = ?");
 const deleteComment = db.prepare("DELETE FROM act_comments WHERE user_id = ? AND act_id = ?");
 const listUsersStmt = db.prepare(`
   SELECT users.id, users.username, users.created_at, COUNT(favorites.id) AS favorite_count
@@ -171,7 +172,7 @@ app.get("/api/comments", requireAuth, (req, res) => {
   const rows = listComments.all(req.session.userId);
   const map = {};
   rows.forEach((r) => {
-    map[r.act_id] = r.comment;
+    map[r.act_id] = { comment: r.comment, updatedAt: r.updated_at };
   });
   res.json(map);
 });
@@ -183,7 +184,8 @@ app.put("/api/comments/:actId", requireAuth, (req, res) => {
     return res.status(204).end();
   }
   upsertComment.run({ userId: req.session.userId, actId: req.params.actId, comment });
-  res.json({ comment });
+  const row = getComment.get(req.session.userId, req.params.actId);
+  res.json({ comment: row.comment, updatedAt: row.updated_at });
 });
 
 app.get("/api/artist-info", async (req, res) => {
