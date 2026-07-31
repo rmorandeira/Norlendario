@@ -95,6 +95,8 @@ const I18N = {
     aboutP3: "Si te ha gustado la iniciativa, puedes invitarme a un café mediante el siguiente botón.",
     aboutContact: "O escríbeme a {email}. Muchas gracias",
     privacyPolicyLink: "política de privacidad y condiciones de uso",
+    gdprExportText: "Puedes descargar una copia de todos tus datos personales conforme al RGPD.",
+    gdprExportLink: "Exportar mis datos",
     privacyPolicy: {
       title: "Política de privacidad y condiciones de uso",
       intro: "Esta política explica qué datos recoge Norlendario, para qué los usa y qué derechos tienes sobre ellos. Versión: {version}.",
@@ -281,6 +283,8 @@ const I18N = {
     aboutP3: "If you liked the idea, you can buy me a coffee with the button below.",
     aboutContact: "Or write to me at {email}. Thanks a lot",
     privacyPolicyLink: "privacy policy and terms of use",
+    gdprExportText: "You can download a copy of all your personal data under GDPR.",
+    gdprExportLink: "Export my data",
     privacyPolicy: {
       title: "Privacy policy and terms of use",
       intro: "This policy explains what data Norlendario collects, what it's used for, and what rights you have over it. Version: {version}.",

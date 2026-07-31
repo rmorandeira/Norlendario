@@ -1816,7 +1816,8 @@
                  <span>${t(lang, "passwordFieldLabel")}</span>
                  <button type="button" class="gate-switch-link" id="startPasswordChangeBtn">${t(lang, "changePasswordBtn")}</button>
                </div>`
-        }`
+        }
+        <p class="gdpr-export-row">${t(lang, "gdprExportText")} <a class="gate-switch-link" href="/api/profile/export">${t(lang, "gdprExportLink")}</a></p>`
         }
 
         <div class="settings-row">

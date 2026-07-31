@@ -961,6 +961,12 @@ body.shared-route-mode .bottom-nav {
   padding: 14px 0;
   border-bottom: 1px solid var(--gridline);
 }
+.gdpr-export-row {
+  margin: 14px 0 0;
+  color: var(--ink-muted);
+  font-size: 0.85rem;
+  line-height: 1.5;
+}
 .settings-row span {
   font-size: 0.95rem;
 }

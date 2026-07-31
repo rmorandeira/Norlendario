@@ -98,6 +98,19 @@ const insertRouteComment = db.prepare(`
   INSERT INTO route_comments (owner_id, act_id, author_user_id, author_name, visitor_token, comment)
   VALUES (@ownerId, @actId, @authorUserId, @authorName, @visitorToken, @comment)
 `);
+const getUserForExport = db.prepare(
+  "SELECT username, email, first_name, last_name, created_at, google_id, consent_ip, consent_user_agent, consent_policy_version FROM users WHERE id = ?"
+);
+const listRouteCommentsAuthoredElsewhere = db.prepare(`
+  SELECT rc.act_id, rc.comment, rc.created_at, u.username AS owner_username
+  FROM route_comments rc
+  JOIN users u ON u.id = rc.owner_id
+  WHERE rc.author_user_id = ? AND rc.owner_id != ?
+  ORDER BY rc.created_at ASC
+`);
+const listPeopleFavoriteUsernames = db.prepare(`
+  SELECT u.username FROM people_favorites pf JOIN users u ON u.id = pf.followee_id WHERE pf.follower_id = ?
+`);
 const getRouteCommentById = db.prepare("SELECT * FROM route_comments WHERE id = ? AND owner_id = ?");
 const updateRouteCommentText = db.prepare("UPDATE route_comments SET comment = ? WHERE id = ?");
 const deleteRouteCommentById = db.prepare("DELETE FROM route_comments WHERE id = ?");
@@ -430,6 +443,49 @@ app.post("/api/profile/avatar", requireAuth, (req, res) => {
   const avatarPath = "/uploads/avatars/" + fileName;
   updateAvatarPath.run(avatarPath, req.session.userId);
   res.json({ avatarPath });
+});
+
+// GDPR data portability (Art. 20): a self-serve dump of everything tied to
+// the account, offered as a plain downloadable JSON file rather than an
+// email request, since it's all already scoped to the logged-in user.
+app.get("/api/profile/export", requireAuth, (req, res) => {
+  const userId = req.session.userId;
+  const user = getUserForExport.get(userId);
+
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    account: {
+      username: user.username,
+      email: user.email || null,
+      firstName: user.first_name || null,
+      lastName: user.last_name || null,
+      createdAt: user.created_at,
+      googleAccountLinked: Boolean(user.google_id),
+      consent: {
+        policyVersion: user.consent_policy_version || null,
+        ip: user.consent_ip || null,
+        userAgent: user.consent_user_agent || null
+      }
+    },
+    favorites: listFavorites.all(userId).map((r) => r.act_id),
+    routeComments: listRouteComments.all(userId).map((c) => ({
+      actId: c.act_id,
+      authorName: c.author_name,
+      comment: c.comment,
+      createdAt: c.created_at,
+      postedByMe: c.author_user_id === userId
+    })),
+    commentsWrittenOnOtherRoutes: listRouteCommentsAuthoredElsewhere.all(userId, userId).map((c) => ({
+      onRouteOf: c.owner_username,
+      actId: c.act_id,
+      comment: c.comment,
+      createdAt: c.created_at
+    })),
+    peopleFavorited: listPeopleFavoriteUsernames.all(userId).map((r) => r.username)
+  };
+
+  res.setHeader("Content-Disposition", `attachment; filename="norlendario-datos-${user.username}.json"`);
+  res.json(payload);
 });
 
 // --- Gente: directory of registered users, public to any signed-in account
