@@ -1172,30 +1172,45 @@ body.shared-route-mode .bottom-nav {
 }
 
 .mode-switch {
+  position: relative;
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 4px;
-  padding-right: 14px;
+  width: 60px;
+  height: 30px;
+  padding: 0;
   border: none;
   border-radius: 999px;
   background: var(--gridline);
-  color: var(--ink);
   font: inherit;
   cursor: pointer;
+  transition: background 0.2s ease;
 }
-.mode-switch-label {
-  font-size: 0.8rem;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+.mode-switch[aria-checked="true"] {
+  background: var(--accent-cyan);
 }
 .mode-switch-dot {
-  flex: 0 0 auto;
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   width: 24px;
   height: 24px;
   border-radius: 50%;
   background: #fff;
+  transition: transform 0.2s ease;
+}
+.mode-switch[aria-checked="true"] .mode-switch-dot {
+  transform: translateX(30px);
+}
+.mode-switch-label {
+  font-size: 0.6rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  color: #06181a;
+  line-height: 1;
 }
 
 .about-block {
