@@ -12,6 +12,7 @@ const { STAGE_COORDS, getRoute, fetchAndStoreRoute } = require("./routes");
 const schedule = require("./schedule");
 const { sendEmail } = require("./mailer");
 const FESTIVAL_DATA = require("./public/data.js");
+const { I18N } = require("./public/i18n.js");
 
 // Bump whenever the privacy policy text changes meaningfully — stored on
 // each account as proof of which version they consented to.
@@ -157,6 +158,10 @@ function requireAdmin(req, res, next) {
     return res.status(401).json({ error: "unauthorized" });
   }
   next();
+}
+
+function escapeHtmlServer(str) {
+  return String(str).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 }
 
 // Real name if the profile has one, falling back to the username — used
@@ -857,6 +862,48 @@ app.get("/ruta/:token", (req, res) => {
 
 app.get("/reset-password/:token", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+// Server-rendered (not the SPA) so it's reachable without JS and can be
+// linked externally — e.g. Google OAuth's consent screen requires a plain
+// URL for the privacy policy, not a client-routed page. Content is pulled
+// from the same I18N strings the in-app legal view uses, so there's one
+// source of truth for the policy text.
+app.get("/politica-privacidad", (req, res) => {
+  const lang = I18N[req.query.lang] ? req.query.lang : "es";
+  const policy = I18N[lang].privacyPolicy;
+  const sectionsHtml = policy.sections
+    .map((s) => `<section><h2>${escapeHtmlServer(s.heading)}</h2><p>${escapeHtmlServer(s.body)}</p></section>`)
+    .join("\n");
+  res.send(`<!doctype html>
+<html lang="${lang}">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>${escapeHtmlServer(policy.title)} — Norlendario</title>
+<style>
+  :root { color-scheme: dark light; }
+  body { margin: 0; padding: 40px 20px 64px; background: #0b0b0b; color: #f2f2f2; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; line-height: 1.6; }
+  .wrap { max-width: 640px; margin: 0 auto; }
+  h1 { font-size: 1.6rem; margin: 0 0 4px; }
+  .intro { color: #a3a3a3; font-size: 0.9rem; margin: 0 0 32px; }
+  h2 { font-size: 1.05rem; margin: 28px 0 6px; }
+  p { color: #d0d0d0; font-size: 0.95rem; margin: 0; }
+  a { color: #17c3ce; }
+  @media (prefers-color-scheme: light) {
+    body { background: #fff; color: #14171a; }
+    .intro, p { color: #4a4a4a; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+<h1>${escapeHtmlServer(policy.title)}</h1>
+<p class="intro">${escapeHtmlServer(policy.intro.replace("{version}", PRIVACY_POLICY_VERSION))}</p>
+${sectionsHtml}
+</div>
+</body>
+</html>`);
 });
 
 app.use(express.static(path.join(__dirname, "public")));

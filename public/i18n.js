@@ -383,3 +383,10 @@ function t(lang, path) {
   for (const p of parts) node = node[p];
   return node;
 }
+
+// Also usable from Node (e.g. server.js rendering the standalone privacy
+// policy page) without affecting the plain <script> load in the browser,
+// where `module` doesn't exist.
+if (typeof module !== "undefined") {
+  module.exports = { I18N, t };
+}
