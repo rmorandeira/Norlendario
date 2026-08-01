@@ -1331,6 +1331,9 @@ body.shared-route-mode .bottom-nav {
 .route-day-group {
   position: relative;
 }
+.route-day-group:last-child {
+  margin-bottom: 64px;
+}
 .route-day-group::before {
   content: "";
   position: absolute;
