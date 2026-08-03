@@ -16,7 +16,7 @@ const { I18N } = require("./public/i18n.js");
 
 // Bump whenever the privacy policy text changes meaningfully — stored on
 // each account as proof of which version they consented to.
-const PRIVACY_POLICY_VERSION = "2026-07-31";
+const PRIVACY_POLICY_VERSION = "2026-08-03";
 
 // Not a secret — safe to hardcode, same as the client-side copy in app.js.
 const GOOGLE_CLIENT_ID = "841182936643-dfjokosrqcu0ba0tj71g4d9gd64pn1hp.apps.googleusercontent.com";

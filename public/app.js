@@ -46,7 +46,7 @@
 
   // Keep in sync with PRIVACY_POLICY_VERSION in server.js — bump both when
   // the policy text changes meaningfully.
-  const PRIVACY_POLICY_VERSION = "2026-07-31";
+  const PRIVACY_POLICY_VERSION = "2026-08-03";
 
   // Not a secret — the Google Identity Services client ID is meant to be
   // public. Keep in sync with GOOGLE_CLIENT_ID in server.js.
@@ -1199,8 +1199,18 @@
       </div>
       <p class="route-visibility-hint">${t(lang, "routePublicHint")}</p>
       ${listHTML}
+      <ins class="adsbygoogle ad-slot"
+           style="display:block"
+           data-ad-client="ca-pub-4894674675461010"
+           data-ad-slot="REPLACE_WITH_ROUTE_AD_SLOT_ID"
+           data-ad-format="auto"
+           data-full-width-responsive="true"></ins>
     </div>`;
     els.routeView.innerHTML = html;
+    // Re-rendered on every favorites/comment change, so each pass needs its
+    // own push — AdSense only picks up <ins> tags present when pushed, it
+    // doesn't watch the DOM for ones added later.
+    (window.adsbygoogle = window.adsbygoogle || []).push({});
 
     els.routeView.querySelectorAll(".route-item").forEach((el) => {
       el.addEventListener("click", () => {
