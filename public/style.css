@@ -83,10 +83,10 @@ body {
   font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   background: var(--page);
   color: var(--ink);
-  overflow-x: hidden;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  min-height: 100dvh;
+  height: 100dvh;
   padding-bottom: var(--bottom-nav-height);
 }
 
