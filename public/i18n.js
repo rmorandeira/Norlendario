@@ -91,7 +91,7 @@ const I18N = {
     lightModeBtn: "Modo claro",
     darkModeBtn: "Modo oscuro",
     aboutP1: "Norlendario es un proyecto personal gratuito para tener siempre a mano el calendario de conciertos del Noroeste PopRock 2026 de A Coruña.",
-    aboutP2: "Guardo lo mínimo para que la app funcione (tu cuenta, tus favoritos y comentarios), uso Google Analytics para ver cuánta gente la visita, y muestro anuncios de Google AdSense para ayudar a costear el proyecto. Todos los detalles están en la política de privacidad de aquí abajo.",
+    aboutP2: "Guardo lo mínimo para que la app funcione (tu cuenta, tus favoritos y comentarios) y uso Google Analytics para ver cuánta gente la visita. Todos los detalles están en la política de privacidad de aquí abajo.",
     aboutP3: "Si te ha gustado la iniciativa, puedes invitarme a un café mediante el siguiente botón.",
     aboutContact: "O escríbeme a {email}. Muchas gracias",
     privacyPolicyLink: "política de privacidad y condiciones de uso",
@@ -122,10 +122,6 @@ const I18N = {
           body: "Esta web usa Google Analytics para recoger datos analíticos de uso de la aplicación: cuánta gente la visita y cómo la usa, de forma agregada. Google puede instalar cookies y recoger tu dirección IP conforme a su propia política de privacidad. Estos datos de navegación no se cruzan con tu cuenta de Norlendario."
         },
         {
-          heading: "Publicidad (Google AdSense)",
-          body: "Esta web muestra anuncios gestionados por Google AdSense. Para ello, Google y sus socios publicitarios pueden instalar cookies y usar identificadores del dispositivo para mostrarte anuncios, incluyendo anuncios personalizados según tu actividad de navegación. Puedes revisar o desactivar la personalización de anuncios desde la configuración de anuncios de Google (adssettings.google.com) y consultar cómo Google usa estos datos en policies.google.com/technologies/partner-sites. Estos datos publicitarios no se cruzan con tu cuenta de Norlendario."
-        },
-        {
           heading: "Para qué usamos tus datos",
           body: "Para crear y gestionar tu cuenta, mostrarte tu ruta por el festival y compartirla si tú decides hacerlo, permitir que otras personas registradas te encuentren en la sección Gente, poder demostrar tu consentimiento si alguna vez fuera necesario, y responder a solicitudes sobre tus derechos o incidencias de seguridad."
         },
@@ -139,7 +135,7 @@ const I18N = {
         },
         {
           heading: "Con quién compartimos tus datos",
-          body: "No vendemos ni cedemos tus datos personales a terceros para uso propio de estos. Los únicos terceros que procesan datos son el proveedor de alojamiento de la aplicación (Railway), el proveedor usado para enviar el correo de recuperación de contraseña (Resend), Google Analytics y Google AdSense, como se explica más arriba."
+          body: "No vendemos ni cedemos tus datos a terceros, ni te enviaremos publicidad. Los únicos terceros que procesan datos son el proveedor de alojamiento de la aplicación (Railway), el proveedor usado para enviar el correo de recuperación de contraseña (Resend) y Google Analytics, como se explica más arriba."
         },
         {
           heading: "Tus derechos",
@@ -290,7 +286,7 @@ const I18N = {
     lightModeBtn: "Light mode",
     darkModeBtn: "Dark mode",
     aboutP1: "Norlendario is a free personal project to always have the Noroeste PopRock 2026 (A Coruña) concert calendar at hand.",
-    aboutP2: "I keep the bare minimum to make the app work (your account, favorites and comments), use Google Analytics to see how many people visit, and show Google AdSense ads to help cover the project's costs. All the details are in the privacy policy below.",
+    aboutP2: "I keep the bare minimum to make the app work (your account, favorites and comments) and use Google Analytics to see how many people visit. All the details are in the privacy policy below.",
     aboutP3: "If you liked the idea, you can buy me a coffee with the button below.",
     aboutContact: "Or write to me at {email}. Thanks a lot",
     privacyPolicyLink: "privacy policy and terms of use",
@@ -319,10 +315,6 @@ const I18N = {
         {
           heading: "Google Analytics",
           body: "This site uses Google Analytics to collect usage analytics data: how many people visit and how they use it, in aggregate. Google may set cookies and collect your IP address per its own privacy policy. This browsing data isn't linked to your Norlendario account."
-        },
-        {
-          heading: "Advertising (Google AdSense)",
-          body: "This site shows ads served by Google AdSense. To do so, Google and its advertising partners may set cookies and use device identifiers to show you ads, including ads personalized to your browsing activity. You can review or turn off ad personalization from Google's ad settings (adssettings.google.com), and see how Google uses this data at policies.google.com/technologies/partner-sites. This advertising data isn't linked to your Norlendario account."
         },
         {
           heading: "What we use your data for",

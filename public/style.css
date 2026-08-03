@@ -219,16 +219,6 @@ main {
   min-height: 32px;
 }
 
-.ad-slot {
-  display: block;
-  min-height: 100px;
-  margin: 24px 0;
-  overflow: hidden;
-}
-.tba-section + .ad-slot {
-  margin-top: 8px;
-}
-
 .empty-msg {
   color: var(--ink-2);
   font-size: 0.9rem;
