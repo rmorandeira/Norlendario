@@ -90,6 +90,7 @@ if (existingColumns.includes("bio")) db.exec("ALTER TABLE artist_info DROP COLUM
 if (existingColumns.includes("wikipedia_url")) db.exec("ALTER TABLE artist_info DROP COLUMN wikipedia_url");
 if (!existingColumns.includes("image_override")) db.exec("ALTER TABLE artist_info ADD COLUMN image_override TEXT");
 if (!existingColumns.includes("description")) db.exec("ALTER TABLE artist_info ADD COLUMN description TEXT");
+if (!existingColumns.includes("spotify_url_override")) db.exec("ALTER TABLE artist_info ADD COLUMN spotify_url_override TEXT");
 
 const userColumns = db.prepare("PRAGMA table_info(users)").all().map((c) => c.name);
 if (!userColumns.includes("share_token")) {

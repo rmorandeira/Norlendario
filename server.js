@@ -809,11 +809,11 @@ app.get("/api/admin/artists", requireAdmin, (req, res) => {
   );
 });
 
-// Manual admin edit — stored in image_override/description, separate from
-// the Spotify-sourced columns, so a later sweep never overwrites it.
+// Manual admin edit — stored in image_override/description/spotify_url_override,
+// separate from the Spotify-sourced columns, so a later sweep never overwrites it.
 app.put("/api/admin/artists/:name", requireAdmin, (req, res) => {
-  const { image, description } = req.body;
-  res.json(setManualOverride(req.params.name, { image, description }));
+  const { image, description, spotifyUrl } = req.body;
+  res.json(setManualOverride(req.params.name, { image, description, spotifyUrl }));
 });
 
 app.post("/api/admin/artists/:name/regenerate", requireAdmin, async (req, res) => {
