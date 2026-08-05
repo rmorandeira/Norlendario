@@ -42,7 +42,7 @@
 
   // Hardcoded rather than location.origin so shared text/images always point
   // at the real production app, even when tested from localhost.
-  const APP_URL = "https://norlendario.web.up.railway.app";
+  const APP_URL = "https://norlendario.up.railway.app";
 
   // Keep in sync with PRIVACY_POLICY_VERSION in server.js — bump both when
   // the policy text changes meaningfully.
